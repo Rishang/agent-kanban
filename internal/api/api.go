@@ -126,6 +126,14 @@ func Handler(d *store.DB, web fs.FS, mcp http.Handler) http.Handler {
 		p, err := d.AddProject(in.Name, in.Dir)
 		reply(w, p, err)
 	})
+	mux.HandleFunc("POST /api/projects/rename", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ ID, Name string }
+		if err := decode(w, r, &in); err != nil {
+			reply(w, nil, err)
+			return
+		}
+		reply(w, nil, d.RenameProject(in.ID, in.Name))
+	})
 	mux.HandleFunc("POST /api/projects/remove", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ ID string }
 		if err := decode(w, r, &in); err != nil {

@@ -15,11 +15,11 @@ anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one 
 
 ### 🤖 An agent takes the next task, end to end
 
-![opencode picks SHOP-1, posts a plan, ticks the checklist live and moves it to Review](.github/images/agent.gif)
+![opencode in the terminal picks SHOP-1, fixes it and moves it to Review while the board updates live](.github/images/agent.gif)
 
-> One prompt: *"work on the next task from the board"*. opencode calls `next_task`, posts its plan,
-> writes a failing test, fixes the bug, ticks each checklist item as it goes and hands the task to
-> **Review** with a summary. You didn't touch the board; it updated live.
+> Left: the real **opencode** TUI. One prompt, *"Pick the next task from the kanban board and finish it"*.
+> Right: the board, live. opencode calls `next_task`, writes a failing test, fixes the bug, ticks the checklist
+> with `update_progress` and hands the task to **Review** with `finish_task`. Nobody touched the board.
 
 ## Quick start
 
@@ -51,6 +51,21 @@ url = "http://127.0.0.1:7777/mcp?agent=codex&project=my-app"
 Anything else: `http://127.0.0.1:7777/mcp?agent=<name>&project=<project>`.
 </details>
 
+## Features
+
+| | Feature | Details |
+|---|---|---|
+| 🤖 | **Agent-native** | MCP endpoint for Claude Code, Codex, opencode, pi or any client; a skill teaches the workflow |
+| 🛡️ | **Guardrails** | Per-project agent permissions; **human-only** tasks that agents skip |
+| ⚡ | **Live** | Every change streams to open browsers over SSE; Activity shows who did what, via UI or MCP |
+| 🗂️ | **Rich tasks** | Priorities, labels, assignees, due dates, checklists, comments, links, WIP limits |
+| 📝 | **Markdown** | Sanitized GitHub-flavoured markdown with highlighted code, mermaid diagrams and SVG |
+| 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` |
+| 📁 | **Multi-project** | Each repo is a project in one shared database; task URLs like `/#my-app/KB-12` |
+| 🎨 | **Themes** | Warm light and dark themes, eleven accents |
+| ☁️ | **Optional sync** | Turso Cloud sync to share boards across machines; local-only by default |
+| 📦 | **One binary** | UI, database engine and libraries embedded; Linux, macOS and Windows builds |
+
 ## See it work
 
 ### 🗂️ A board that reads like a doc
@@ -79,12 +94,28 @@ may do, and tasks marked **human-only** are off limits to them.
 
 ![Themes, accents, members and agent permissions](.github/images/settings.gif)
 
-<details><summary><b>How agents use it</b></summary>
+## MCP tools
 
-The loop is four calls: `next_task` → `start_task` → `update_progress` → `finish_task`. Inputs are forgiving
-(`"In Progress"`, `"#Bug"`, `12` or `SHOP-12`), and a wrong value comes back with the list of valid ones.
-Every change lands in **Activity** with who did it and how (UI or MCP).
-</details>
+Agents work in a four-call loop: **`next_task` → `start_task` → `update_progress` → `finish_task`**.
+
+| Tool | What it does |
+|---|---|
+| `get_board` | Columns (counts, WIP limits, roles), labels, members, priorities and your permissions. Call first. |
+| `next_task` | What to work on: your in-progress task, else the most urgent unassigned todo, with the reason |
+| `start_task` | Assign yourself, move to in progress and post your plan, in one call |
+| `update_progress` | Tick checklist items (by index or text), add items, post a note |
+| `finish_task` | Summary + PR link, move to review (or Done with `done: true` and the *finish* permission) |
+| `my_tasks` | Your open tasks, for resuming work |
+| `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
+| `get_task` | Full description, checklist and comments |
+| `list_labels` | Labels with task counts |
+| `create_task` / `create_tasks` | Create one task, or up to 50 with per-item errors |
+| `update_task` / `move_task` / `check_item` / `add_comment` | Lower-level edits |
+| `delete_task` | Off by default; enable in Settings → MCP & skill |
+
+Inputs are forgiving (`"In Progress"`, `"#Bug"`, `12` or `SHOP-12`, assignee `me`), and a wrong value comes back
+with the list of valid ones. Every change lands in **Activity** with who did it and how (UI or MCP).
+Prompts: **`plan`** breaks a goal into tasks, **`standup`** summarizes the board.
 
 ## Configuration
 
@@ -100,7 +131,16 @@ Precedence: flags > environment > `.env` > `settings.json`.
 
 ## Keyboard
 
-`n` new task · `/` or `⌘K` search · `f` filter board · `p` projects · `,` settings · `⌘↵` save and close · `Esc` close
+| Key | Does |
+|---|---|
+| `n` | New task |
+| `/`, `⌘K` / `Ctrl+K` | Search every project (`↑` `↓` move, `↵` open) |
+| `f` | Filter this board; `↵` keeps the filter, `Esc` clears it |
+| `p` | Projects panel |
+| `,` | Settings |
+| `Tab` (in a task title) | Jump to the description |
+| `⌘↵` / `Ctrl+↵` | Save and close the task |
+| `Esc` | Keep what you typed in a description or tags, cancel other fields, close panels |
 
 ## Development
 

@@ -360,6 +360,26 @@ func seedProject(tx *sql.Tx, pid string) error {
 	return putMeta(tx, "settings:"+pid, st)
 }
 
+// RenameProject changes a project's display name. The id stays, so board URLs and MCP ?project= links keep working.
+func (d *DB) RenameProject(id, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 64 {
+		return errors.New("project name must be 1-64 characters")
+	}
+	err := d.write(func(tx *sql.Tx) (string, Event, error) {
+		var old string
+		if err := tx.QueryRow(`SELECT name FROM projects WHERE id=?`, id).Scan(&old); err != nil {
+			return "", Event{}, fmt.Errorf("unknown project %q", id)
+		}
+		_, err := tx.Exec(`UPDATE projects SET name=? WHERE id=?`, name, id)
+		return id, Event{Who: d.me, Via: "ui", Action: "renamed project", Detail: old + " → " + name}, err
+	})
+	if err == nil {
+		d.publish("", Event{T: time.Now().UnixMilli(), Who: d.me, Via: "ui", Action: "projects changed"})
+	}
+	return err
+}
+
 // RemoveProject deletes a project and everything in it.
 func (d *DB) RemoveProject(id string) error {
 	err := d.write(func(tx *sql.Tx) (string, Event, error) {

@@ -268,7 +268,7 @@ func getTasks(q querier, pid string, comments bool) ([]Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	var out []Task
+	out := []Task{} // never null in JSON: the UI maps over it
 	idx := map[string]int{}
 	for rows.Next() {
 		t, err := scanTask(rows)
@@ -1042,7 +1042,7 @@ func (s *Store) Import(who string, b Board) error {
 			if t.Checklist == nil {
 				t.Checklist = []Check{}
 			}
-			if err := checkLink(t.Link); err != nil { // imports are untrusted files: same rule as CreateTask
+			if err := checkLink(t.Link); err != nil { // imports are untrusted files: links must be http(s), like CreateTask
 				return Event{}, fmt.Errorf("task %s: %w", t.ID, err)
 			}
 			if err := s.insertTask(tx, t); err != nil {

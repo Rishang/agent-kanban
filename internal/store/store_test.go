@@ -21,6 +21,15 @@ func TestStore(t *testing.T) {
 	if again, _ := db.AddProject("other name", "/tmp/demo"); again.ID != p.ID {
 		t.Fatalf("same dir registered twice: %+v", again)
 	}
+	if err := db.RenameProject(p.ID, "  Renamed App "); err != nil {
+		t.Fatal(err)
+	}
+	if ps, _ := db.Projects(); ps[0].ID != p.ID || ps[0].Name != "Renamed App" {
+		t.Fatalf("rename kept the id and trimmed the name? %+v", ps[0])
+	}
+	if db.RenameProject(p.ID, " ") == nil || db.RenameProject("nope", "x") == nil {
+		t.Fatal("accepted an empty name or an unknown project")
+	}
 	s, _ := db.Project(p.ID)
 	other, _ := db.AddProject("Other", "")
 	os2, _ := db.Project(other.ID)
@@ -95,6 +104,9 @@ func TestStore(t *testing.T) {
 		b.Tasks[0].Link = "javascript:alert(1)"
 		if err := s.Import("me", b); err == nil {
 			t.Fatal("import accepted a javascript: link")
+		}
+		if after, err := s.Board(); err != nil || len(after.Tasks) != len(b.Tasks) || after.Tasks[0].Link == b.Tasks[0].Link {
+			t.Fatalf("rejected import was not rolled back: %v", err)
 		}
 	}
 

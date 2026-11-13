@@ -63,6 +63,14 @@ main.noside .side { display: none; }
 .pitem .pn b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .pitem .pn small { display: block; color: var(--muted); font: 11px 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pitem .count { font-size: 11px; color: var(--muted); }
+.pitem .pact { display: none; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 3px 6px; border-radius: 6px; font-size: 13px; }
+.pitem:hover .pact, .pitem:focus-within .pact { display: block; }
+.pitem:hover .count, .pitem:focus-within .count { display: none; }
+.pitem .pact:hover { color: var(--text); background: var(--hover); }
+.pitem .pact.del:hover { color: var(--red, #e06c75); }
+#boardName { cursor: text; border-radius: 6px; padding: 1px 4px; }
+#boardName:hover { background: var(--hover); }
+.brand input, .pitem .pn input { width: 100%; font: 600 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; outline: none; }
 .padd { padding: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .padd .inp { max-width: none; }
 .brand { cursor: pointer; border-radius: 8px; padding: 2px 6px 2px 2px; }
@@ -571,9 +579,12 @@ async function switchProject(pid, fromRoute) {
   if (!fromRoute && decodeURIComponent(location.hash.slice(1)) !== pid) history.pushState(null, '', '#' + encodeURIComponent(pid));
 }
 function renderProjects() {
+  if ($('#plist').contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; // mid-rename
   $('#plist').innerHTML = PROJECTS.map(p => `<div class="pitem ${p.id === PROJ ? 'on' : ''}" data-pid="${esc(p.id)}" title="${esc(p.dir || p.id)}">
     <span class="pi" style="background:${projColor(p.id)}">${esc(p.name.slice(0, 1).toUpperCase())}</span>
     <span class="pn"><b>${esc(p.name)}</b><small>${esc(p.dir || p.id)}</small></span>
+    <button class="pact" data-act="rename" title="Rename project" aria-label="Rename ${esc(p.name)}">✎</button>
+    <button class="pact del" data-act="delete" title="Delete project" aria-label="Delete ${esc(p.name)}">🗑</button>
     <span class="count" title="open / total tasks">${p.open}/${p.total}</span></div>`).join('') || '<p class="ph" style="padding:10px">No projects.</p>';
 }
 const projPanel = $('#projects');
@@ -586,7 +597,44 @@ $('#rProjects').onclick = () => toggleProjects();
 $('#rBoard').onclick = () => { closeTask(); closeSettings(); };
 $('#pClose').onclick = () => toggleProjects(false);
 $('.brand').onclick = () => toggleProjects();
-$('#plist').onclick = e => { const it = e.target.closest('[data-pid]'); if (it) switchProject(it.dataset.pid); };
+$('#plist').onclick = e => {
+  const it = e.target.closest('[data-pid]'); if (!it || e.target.closest('input')) return;
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  if (act === 'rename') return renameProject(it.dataset.pid, it.querySelector('.pn b'));
+  if (act === 'delete') return deleteProject(it.dataset.pid);
+  switchProject(it.dataset.pid);
+};
+// Inline rename (sidebar row or header): Enter or blur saves, Esc cancels. The id (URLs, MCP ?project=) never changes.
+function renameProject(pid, el) {
+  const p = PROJECTS.find(x => x.id === pid); if (!p || !el) return;
+  const inp = document.createElement('input');
+  inp.value = p.name; inp.maxLength = 64; inp.setAttribute('aria-label', 'Project name');
+  el.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return; done = true;
+    const name = inp.value.trim();
+    inp.replaceWith(el);
+    if (save && name && name !== p.name) {
+      el.textContent = name;
+      await post('/api/projects/rename', { id: p.id, name }).catch(() => { el.textContent = p.name; });
+    }
+    loadProjects();
+  };
+  inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
+  inp.onclick = e => e.stopPropagation();
+  inp.onblur = () => finish(true);
+}
+async function deleteProject(pid) {
+  const p = PROJECTS.find(x => x.id === pid); if (!p) return;
+  if (PROJECTS.length <= 1) return toast("Can't delete the last project");
+  if (prompt(`Type “${p.name}” to delete this project and all ${p.total} of its tasks`) !== p.name) return;
+  if (!await post('/api/projects/remove', { id: pid }).then(() => true, () => false)) return;
+  await loadProjects();
+  if (pid === PROJ) switchProject(PROJECTS[0]?.id);
+}
+$('#boardName').onclick = e => { e.stopPropagation(); renameProject(PROJ, $('#boardName')); };
+$('#boardName').title = 'Rename project';
 async function addProject() {
   const name = $('#pName').value.trim(), dir = $('#pDir').value.trim();
   if (!name) return $('#pName').focus();
