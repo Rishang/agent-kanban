@@ -89,6 +89,14 @@ func TestStore(t *testing.T) {
 	if _, err := s.UpdateTask("me", "ui", TaskPatch{ID: agentT.ID, Link: ptr("javascript:alert(1)")}); err == nil {
 		t.Fatal("accepted a javascript: link")
 	}
+	if b, err := s.Board(); err != nil {
+		t.Fatal(err)
+	} else {
+		b.Tasks[0].Link = "javascript:alert(1)"
+		if err := s.Import("me", b); err == nil {
+			t.Fatal("import accepted a javascript: link")
+		}
+	}
 
 	// projects are isolated: same ids, separate boards
 	if o1, err := os2.CreateTask("me", "ui", TaskInput{Title: "other 1"}); err != nil || o1.ID != "KB-1" {

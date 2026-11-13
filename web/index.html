@@ -968,7 +968,7 @@ function renderDrawer() {
     <label class="prop"><span>Assignee</span><select data-f="assignee">${opts([['', 'Unassigned'], ...B.members.filter(m => !(t.human && m.agent)).map(m => [m.name, m.name + (m.agent ? ' (agent)' : '')])], t.assignee)}</select></label>
     <label class="prop"><span>Due date</span><input type="date" data-f="due" value="${esc(t.due || '')}"></label>
     <div class="prop"><span>Link</span><div class="linkrow"><input type="url" data-f="link" placeholder="https://… PR, issue, doc" value="${esc(t.link || '')}">
-      ${t.link ? `<a href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" title="Open link">↗</a>` : ''}</div></div>
+      ${/^https?:\/\//i.test(t.link || '') ? `<a href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" title="Open link">↗</a>` : ''}</div></div>
     <label class="prop"><span>Human</span><div class="hrow"><input type="checkbox" class="toggle" data-f="human" ${t.human ? 'checked' : ''}><small>Agents skip it</small></div></label>
     <div class="prop"><span>Labels</span><div class="chips">${t.labels.map((l, i) => tag(l, `<button data-rmlabel="${i}" aria-label="Remove ${esc(l)}">×</button>`)).join('')}
       <input id="labelIn" list="labelOpts" placeholder="+ label"><datalist id="labelOpts">${freeLabels.map(l => `<option value="${esc(l)}">`).join('')}</datalist></div></div>

@@ -1042,6 +1042,9 @@ func (s *Store) Import(who string, b Board) error {
 			if t.Checklist == nil {
 				t.Checklist = []Check{}
 			}
+			if err := checkLink(t.Link); err != nil { // imports are untrusted files: same rule as CreateTask
+				return Event{}, fmt.Errorf("task %s: %w", t.ID, err)
+			}
 			if err := s.insertTask(tx, t); err != nil {
 				return Event{}, fmt.Errorf("task %s: %w", t.ID, err)
 			}
