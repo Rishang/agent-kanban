@@ -1,0 +1,85 @@
+version: 2
+
+project_name: agent-kanban
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: agent-kanban
+    binary: agent-kanban
+    main: ./cmd/agent-kanban
+    # Pure Go: tursogo loads its embedded native library with purego, so no cgo
+    # and no per-OS runners are needed.
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    # turso ships no native lib for these yet. Windows on ARM runs the amd64 build.
+    ignore:
+      - goos: darwin
+        goarch: amd64
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Tag }}
+
+archives:
+  - id: agent-kanban
+    ids:
+      - agent-kanban
+    name_template: >-
+      agent-kanban_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+
+release:
+  prerelease: auto
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+homebrew_casks:
+  - name: agent-kanban
+    ids:
+      - agent-kanban
+    repository:
+      owner: Rishang
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    # No tap token (unset secret) means binaries still publish instead of the
+    # whole release failing on a 401 from the tap repo.
+    skip_upload: '{{ if eq .Env.HOMEBREW_TAP_TOKEN "" }}true{{ else }}false{{ end }}'
+    homepage: https://github.com/Rishang/agent-kanban
+    description: Local kanban board for humans and coding agents
+    hooks:
+      post:
+        install_steps: |
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/agent-kanban"]

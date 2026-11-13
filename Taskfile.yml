@@ -41,3 +41,13 @@ tasks:
     desc: Run tests
     cmds:
       - go test ./...
+
+  clean:
+    desc: Remove build output
+    cmds:
+      - rm -rf bin dist
+
+  release:
+    desc: Local goreleaser snapshot into ./dist
+    cmds:
+      - goreleaser release --snapshot --clean

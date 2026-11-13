@@ -1,54 +1,36 @@
-name: release
+name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing tag to (re)build, e.g. v0.1.0"
-        required: true
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  goreleaser:
     runs-on: ubuntu-latest
-    env:
-      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ env.TAG }}
+          # goreleaser builds the changelog from history.
+          fetch-depth: 0
 
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: true
 
-      - run: go test ./...
+      - name: Run tests before releasing
+        run: go test ./...
 
-      # Pure Go cross-compile from one runner: tursogo loads its embedded native library
-      # with purego, so no cgo or per-OS runners are needed.
-      # ponytail: no windows/arm64; turso ships no native lib for it yet. Windows on ARM runs the amd64 build.
-      - name: Build
-        run: |
-          mkdir dist
-          for target in linux/amd64 linux/arm64 darwin/arm64 windows/amd64; do
-            os=${target%/*} arch=${target#*/}
-            name=agent-kanban_${TAG#v}_${os}_${arch}
-            ext=; [ "$os" = windows ] && ext=.exe
-            mkdir "$name"
-            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
-              -ldflags "-s -w -X main.version=$TAG" -o "$name/agent-kanban$ext" ./cmd/agent-kanban
-            cp README.md "$name/"
-            if [ "$os" = windows ]; then zip -qr "dist/$name.zip" "$name"; else tar -czf "dist/$name.tar.gz" "$name"; fi
-          done
-          cd dist && sha256sum * > checksums.txt
-
-      - name: Publish
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --generate-notes --verify-tag
-          gh release upload "$TAG" dist/* --clobber
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Personal access token with contents:write on Rishang/homebrew-tap.
+          # Without it, the cask upload is skipped and the release still publishes binaries.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

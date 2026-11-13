@@ -5,3 +5,4 @@ kanban.db-*
 .env
 .serena/
 .github/videos/
+dist/
