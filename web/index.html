@@ -415,20 +415,26 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
   </div>
 </script>
 <div class="app">
-<header>
-  <div class="brand"><img class="logo" src="logo.svg" alt=""><span id="boardName">Local Kanban</span></div>
-  <div class="sync" title="Turso database file · live updates"><span class="dot off" id="dot"></span><span id="dbName">kanban.db</span> · <span id="synced">connecting…</span></div>
+<header></header>
+<script type="text/x-template" id="tpl-header">
+  <div class="brand" @click="toggleProjects()"><img class="logo" src="logo.svg" alt="">
+    <input v-if="renaming" ref="nameEl" v-model="newName" maxlength="64" aria-label="Project name"
+      @click.stop @keydown.stop @keydown.enter="saveName" @keydown.esc="renaming = false" @blur="saveName">
+    <span v-else id="boardName" title="Rename project" @click.stop="startRename">{{ S.B.settings.board || 'Local Kanban' }}</span></div>
+  <div class="sync" :title="syncTitle"><span class="dot" :class="{ off: !S.online }" id="dot"></span><span id="dbName">{{ dbName }}</span> · <span id="synced">{{ status }}</span></div>
   <div class="spacer"></div>
-  <input class="search" id="q" placeholder="Filter this board…  (f)" aria-label="Filter this board">
-  <select class="ctl" id="sort" aria-label="Sort">
+  <input class="search" id="q" v-model="S.q" placeholder="Filter this board…  (f)" aria-label="Filter this board"
+    @keydown.enter.prevent="$event.target.blur()" @keydown.esc.stop="S.q = ''; $event.target.blur()">
+  <select class="ctl" id="sort" v-model="S.sort" aria-label="Sort">
     <option value="order">Sort: manual</option>
     <option value="priority">Sort: priority</option>
     <option value="due">Sort: due date</option>
     <option value="updated">Sort: recently updated</option>
   </select>
-  <select class="ctl" id="who" aria-label="Filter by assignee"><option value="">All assignees</option></select>
-  <button class="btn" id="new">+ New task</button>
-</header>
+  <select class="ctl" id="who" v-model="S.who" aria-label="Filter by assignee">
+    <option value="">All assignees</option><option v-for="m in S.B.members" :key="m.name">{{ m.name }}</option></select>
+  <button class="btn" id="new" @click="newTask">+ New task</button>
+</script>
 
 <main>
   <section class="board" id="board"></section>
@@ -664,7 +670,7 @@ if (!window.Vue || !window.marked || !window.DOMPurify) {
 }
 // ---------- State (from GET /api/board, refreshed on every SSE event) ----------
 // All UI state. S.B is the board from GET /api/board, replaced on every SSE event.
-const S = Vue.reactive({ B: { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' }, openId: null, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
+const S = Vue.reactive({ B: { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' }, openId: null, online: null, palOpen: false, projOpen: false, settingsOpen: false, sidePanel: true, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
   projects: [], proj: null, pal: { q: '', n: 0 }, settingsN: 0 });
 const members = Vue.computed(() => Object.fromEntries(S.B.members.map(m => [m.name, m])));
 const labels = Vue.computed(() => Object.fromEntries(S.B.labels.map(l => [l.name, l.color])));
@@ -708,6 +714,14 @@ function toast(msg) {
   clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
+// ---------- Panels: open/closed state lives in S; this is the only place that sets their classes ----------
+Vue.watchEffect(() => {
+  const on = (sel, cls, v) => $(sel).classList.toggle(cls, !!v);
+  on('#projects', 'open', S.projOpen); on('#rProjects', 'on', S.projOpen); on('#palette', 'open', S.palOpen);
+  on('#drawer', 'open', S.openId); on('#settings', 'open', S.settingsOpen); on('#scrim', 'show', S.openId || S.settingsOpen);
+  on('main', 'noside', !S.sidePanel); on('#rPanel', 'on', S.sidePanel);
+});
+
 // ---------- Server ----------
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
@@ -731,7 +745,7 @@ async function load() {
   if (my < applied) return; // a newer response already landed
   if (!r.ok) { toast(b.error || 'Project not found'); const other = S.projects.find(p => p.id !== S.proj); return other && switchProject(other.id); }
   applied = my; S.B = b;
-  renderAll();
+  afterLoad();
 }
 
 // ---------- Projects ----------
@@ -754,39 +768,23 @@ async function switchProject(pid, fromRoute) {
   if (!pid || !S.projects.some(p => p.id === pid)) return;
   if (S.openId) closeTask();
   S.proj = pid; store.set('kanban:project', pid);
-  $('#q').value = S.q = '';
+  S.q = '';
   await load();
   if (!fromRoute && decodeURIComponent(location.hash.slice(1)) !== pid) history.pushState(null, '', '#' + encodeURIComponent(pid));
 }
-const projPanel = $('#projects');
-function toggleProjects(on = !projPanel.classList.contains('open')) {
-  projPanel.classList.toggle('open', on); $('#rProjects').classList.toggle('on', on);
-  store.set('kanban:projects', on ? '1' : null);
-}
+function toggleProjects(on = !S.projOpen) { S.projOpen = on; store.set('kanban:projects', on ? '1' : null); }
 toggleProjects(store.get('kanban:projects') === '1');
 $('#rProjects').onclick = () => toggleProjects();
 $('#rBoard').onclick = () => { closeTask(); closeSettings(); };
-$('.brand').onclick = () => toggleProjects();
-// Header rename: Enter or blur saves, Esc cancels. The id (URLs, MCP ?project=) never changes.
-function renameProject(pid, el) {
-  const p = S.projects.find(x => x.id === pid); if (!p || !el) return;
-  const inp = document.createElement('input');
-  inp.value = p.name; inp.maxLength = 64; inp.setAttribute('aria-label', 'Project name');
-  el.replaceWith(inp); inp.focus(); inp.select();
-  let done = false;
-  const finish = async save => {
-    if (done) return; done = true;
-    const name = inp.value.trim();
-    inp.replaceWith(el);
-    if (save && name && name !== p.name) {
-      el.textContent = name;
-      await post('/api/projects/rename', { id: p.id, name }).catch(() => { el.textContent = p.name; });
-    }
-    loadProjects();
-  };
-  inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
-  inp.onclick = e => e.stopPropagation();
-  inp.onblur = () => finish(true);
+// Rename from the header or the projects panel. The id (URLs, MCP ?project=) never changes.
+async function renameProject(p, name) {
+  name = name.trim();
+  if (p && name && name !== p.name) {
+    const old = p.name, show = n => { p.name = n; if (p.id === S.proj) S.B.settings.board = n; };
+    show(name);
+    await post('/api/projects/rename', { id: p.id, name }).catch(() => show(old));
+  }
+  loadProjects();
 }
 async function deleteProject(pid) {
   const p = S.projects.find(x => x.id === pid); if (!p) return;
@@ -796,8 +794,27 @@ async function deleteProject(pid) {
   await loadProjects();
   if (pid === S.proj) switchProject(S.projects[0]?.id);
 }
-$('#boardName').onclick = e => { e.stopPropagation(); renameProject(S.proj, $('#boardName')); };
-$('#boardName').title = 'Rename project';
+
+// ---------- Header (Vue): project name (click to rename), live status, board filters ----------
+Vue.createApp({
+  template: '#tpl-header',
+  setup() {
+    const renaming = Vue.ref(false), newName = Vue.ref(''), nameEl = Vue.ref(null);
+    const current = () => S.projects.find(p => p.id === S.proj);
+    async function startRename() {
+      const p = current(); if (!p) return;
+      newName.value = p.name; renaming.value = true; await Vue.nextTick(); nameEl.value?.focus(); nameEl.value?.select();
+    }
+    function saveName() { if (!renaming.value) return; renaming.value = false; renameProject(current(), newName.value); } // Enter then blur: once
+    const dbName = Vue.computed(() => S.B.db.split(/[\\/]/).pop() || 'kanban.db');
+    const status = Vue.computed(() => S.online == null ? 'connecting…' : !S.online ? 'offline · reconnecting…'
+      : !S.B.sync ? 'live' : S.B.sync.error ? 'live · cloud sync failing' : 'live · synced');
+    const syncTitle = Vue.computed(() => S.B.db + (!S.B.sync ? ' · live updates' : ` · sync ${S.B.sync.remote}` +
+      (S.B.sync.error ? ` · last error: ${S.B.sync.error}` : S.B.sync.lastPull ? ` · synced ${ago(S.B.sync.lastPull)}` : '')));
+    return { S, renaming, newName, nameEl, dbName, status, syncTitle, startRename, saveName, toggleProjects, newTask };
+  },
+}).mount('header');
+Vue.watchEffect(() => document.title = S.B.settings.board || 'Local Kanban');
 Vue.createApp({
   template: '#tpl-projects',
   setup() {
@@ -806,12 +823,9 @@ Vue.createApp({
       renaming.value = p.id; newName.value = p.name; await Vue.nextTick();
       const el = [].concat(renameEl.value)[0]; el?.focus(); el?.select();
     }
-    async function saveRename(p) {
+    function saveRename(p) {
       if (renaming.value !== p.id) return; // Enter then blur: save once
-      renaming.value = null;
-      const v = newName.value.trim();
-      if (v && v !== p.name) { p.name = v; await post('/api/projects/rename', { id: p.id, name: v }).catch(() => {}); }
-      loadProjects();
+      renaming.value = null; renameProject(p, newName.value);
     }
     async function add() {
       if (!name.value.trim()) return nameEl.value?.focus();
@@ -826,8 +840,8 @@ Vue.createApp({
 // ---------- Command palette: search every project ----------
 const pal = $('#palette');
 const FILTERS = ['is:open', 'is:done', 'is:human', 'is:agent', 'is:overdue', '@', 'label:', 'col:', 'prio:', 'project:'];
-function openPalette(q = '') { pal.classList.add('open'); S.pal.q = q; S.pal.n++; }
-function closePalette() { pal.classList.remove('open'); if (pal.contains(document.activeElement)) document.activeElement.blur(); } // else shortcuts land in the hidden input
+function openPalette(q = '') { S.palOpen = true; S.pal.q = q; S.pal.n++; }
+function closePalette() { S.palOpen = false; if (pal.contains(document.activeElement)) document.activeElement.blur(); } // else shortcuts land in the hidden input
 const hl = (text, words) => {
   if (!words.length) return esc(text);
   const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
@@ -875,20 +889,15 @@ Vue.createApp({
 }).mount('#palApp');
 pal.onclick = e => { if (e.target === pal) closePalette(); };
 
-function setLive(on) {
-  $('#dot').classList.toggle('off', !on);
-  $('#synced').textContent = !on ? 'offline · reconnecting…' : !S.B.sync ? 'live' : S.B.sync.error ? 'live · cloud sync failing' : 'live · synced';
-}
-
 function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => { setLive(true); boot(); };
+  es.onopen = () => { S.online = true; boot(); };
   es.onmessage = e => {
     const m = JSON.parse(e.data);
     if (m.project === S.proj || m.via === 'sync') { flashEv = m; load(); }
     loadProjectsSoon(); // counts / list
   };
-  es.onerror = () => setLive(false); // EventSource reconnects by itself
+  es.onerror = () => S.online = false; // EventSource reconnects by itself
 }
 
 // debounced saves keyed by field; flush() forces a pending save now
@@ -897,14 +906,9 @@ function later(key, fn, ms = 500) { clearTimeout(pending[key]?.t); pending[key] 
 function flush(key) { const p = pending[key]; if (p) { clearTimeout(p.t); delete pending[key]; p.fn(); } }
 const typingIn = el => el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
 
-function renderAll() {
-  $('#boardName').textContent = S.B.settings.board;
-  document.title = S.B.settings.board;
-  $('#dbName').textContent = S.B.db.split(/[\\/]/).pop();
-  setLive(true);
-  $('.sync').title = S.B.db + (!S.B.sync ? ' · live updates' : ` · sync ${S.B.sync.remote}` +
-    (S.B.sync.error ? ` · last error: ${S.B.sync.error}` : S.B.sync.lastPull ? ` · synced ${ago(S.B.sync.lastPull)}` : ''));
-  fillWho();
+function afterLoad() {
+  S.online = true;
+  if (S.who && !member(S.who)) S.who = ''; // assignee filter on a removed member
   if (S.openId) {
     if (!byId(S.openId)) { toast(`${S.openId} was deleted`); closeTask(); }
   }
@@ -923,12 +927,6 @@ function sorted(list) {
     k === 'priority' ? PRIO[a.priority] - PRIO[b.priority] :
     k === 'due' ? (a.due || '9').localeCompare(b.due || '9') :
     k === 'updated' ? b.updated - a.updated : a.pos - b.pos);
-}
-
-function fillWho() {
-  const sel = $('#who'), v = sel.value;
-  sel.innerHTML = '<option value="">All assignees</option>' + S.B.members.map(m => `<option>${esc(m.name)}</option>`).join('');
-  sel.value = member(v) ? v : ''; S.who = sel.value;
 }
 
 // ---------- Side panel (Vue): Activity timeline or by-task tree, connected agents, tools ----------
@@ -996,7 +994,7 @@ Vue.createApp({
       const id = dragId.value; dragId.value = overCol.value = null;
       const after = [...e.currentTarget.querySelectorAll('.card')].filter(c => c.dataset.id !== id)
         .find(c => e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2);
-      S.sort = $('#sort').value = 'order';
+      S.sort = 'order';
       await api('move_task', { id, column: col, before: after?.dataset.id || '' }).catch(() => {});
       load();
     }
@@ -1059,13 +1057,13 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
 const drawer = $('#drawer');
 
 function openTask(id) {
-  closeSettings(); S.openId = id; drawer.classList.add('open'); $('#scrim').classList.add('show');
+  closeSettings(); S.openId = id;
   const h = S.proj + '/' + id;
   if (decodeURIComponent(location.hash.slice(1)) !== h) history.pushState(null, '', '#' + encodeURIComponent(S.proj) + '/' + encodeURIComponent(id));
 }
 function closeTask() {
   if (!S.openId) return;
-  flush('title'); flush('desc'); S.openId = null; drawer.classList.remove('open'); if (!settingsEl.classList.contains('open')) $('#scrim').classList.remove('show');
+  flush('title'); flush('desc'); S.openId = null;
   if (decodeURIComponent(location.hash.slice(1)) !== S.proj) history.pushState(null, '', '#' + encodeURIComponent(S.proj));
 }
 // URLs: http://host/#project opens a board, #project/KB-12 a task; back/forward work.
@@ -1212,8 +1210,8 @@ setAccent(store.get('kanban:accent'));
 
 // ---------- Settings ----------
 const settingsEl = $('#settings');
-function openSettings() { if (S.openId) closeTask(); S.settingsN++; settingsEl.classList.add('open'); $('#scrim').classList.add('show'); }
-function closeSettings() { if (!settingsEl.classList.contains('open')) return; Object.keys(pending).forEach(flush); settingsEl.classList.remove('open'); $('#scrim').classList.remove('show'); }
+function openSettings() { if (S.openId) closeTask(); S.settingsN++; S.settingsOpen = true; }
+function closeSettings() { if (!S.settingsOpen) return; Object.keys(pending).forEach(flush); S.settingsOpen = false; }
 $('#settingsBtn').onclick = openSettings;
 
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -1224,7 +1222,7 @@ Vue.createApp({
     const sync = () => Object.assign(f, clone({ settings: S.B.settings, columns: S.B.columns, members: S.B.members, labels: S.B.labels }));
     const quiet = () => !typingIn(settingsEl) && !Object.keys(pending).length;
     Vue.watch(() => S.settingsN, sync);                                                // opened
-    Vue.watch(() => S.B, () => settingsEl.classList.contains('open') && quiet() && sync()); // live update
+    Vue.watch(() => S.B, () => S.settingsOpen && quiet() && sync()); // live update
     const refresh = async () => { await load(); sync(); };
     const NAV = [['s-general', 'General'], ['s-columns', 'Columns'], ['s-appearance', 'Appearance'], ['s-labels', 'Labels'],
       ['s-members', 'Members & agents'], ['s-mcp', 'MCP & skill'], ['s-data', 'Data']];
@@ -1244,7 +1242,7 @@ Vue.createApp({
     const saveCols = () => later('cols', () => api('save_columns', clone(f.columns)).then(load).catch(load));
     const saveMembers = () => later('members', () => api('save_members', clone(f.members)).then(load).catch(load));
     const saveLabels = () => later('labels', () => api('save_labels', clone(f.labels)).then(load).catch(load));
-    const setHeader = () => $('#boardName').textContent = f.settings.board;
+    const setHeader = () => S.B.settings.board = f.settings.board;
     const act = async fn => { try { await fn(); } catch { /* toast already shown */ } await refresh(); };
     const moveCol = (i, d) => act(() => { const c = clone(f.columns); [c[i], c[i + d]] = [c[i + d], c[i]]; return api('save_columns', c); });
     const delCol = i => act(() => api('save_columns', clone(f.columns).filter((_, j) => j !== i)));
@@ -1297,25 +1295,19 @@ document.addEventListener('click', e => {
   const f = e.target.closest('[data-open]'); if (f) openTask(f.dataset.open);
 });
 $('#scrim').onclick = () => { closeTask(); closeSettings(); };
-$('#new').onclick = async e => {
-  e.stopPropagation();
+async function newTask() {
   const t = await api('create_task', { title: 'Untitled task' }).catch(() => null); if (!t) return;
   await load(); openTask(t.id); await Vue.nextTick(); $('.d-title')?.select();
-};
-['q', 'sort', 'who'].forEach(k => $('#' + k).addEventListener('input', e => S[k] = e.target.value));
+}
 $('#rSearch').onclick = () => openPalette();
-$('#rNew').onclick = e => $('#new').onclick(e);
-const setPanel = on => { $('main').classList.toggle('noside', !on); $('#rPanel').classList.toggle('on', on); store.set('kanban:panel', on ? null : 'off'); };
-$('#rPanel').onclick = () => setPanel($('main').classList.contains('noside'));
+$('#rNew').onclick = () => newTask();
+const setPanel = on => { S.sidePanel = on; store.set('kanban:panel', on ? null : 'off'); };
+$('#rPanel').onclick = () => setPanel(!S.sidePanel);
 setPanel(store.get('kanban:panel') !== 'off');
-$('#q').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }                       // keep the filter
-  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = S.q = ''; e.target.blur(); } // clear it
-});
 document.addEventListener('keydown', e => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return pal.classList.contains('open') ? closePalette() : openPalette(); }
-  if (e.key === 'Escape' && pal.classList.contains('open')) return closePalette();
-  if (e.key === 'Escape' && projPanel.classList.contains('open')) return toggleProjects(false);
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return S.palOpen ? closePalette() : openPalette(); }
+  if (e.key === 'Escape' && S.palOpen) return closePalette();
+  if (e.key === 'Escape' && S.projOpen) return toggleProjects(false);
   if (e.key === 'Escape' && S.openId) return closeTask();
   if (e.key === 'Escape') return closeSettings();
   if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1323,7 +1315,7 @@ document.addEventListener('keydown', e => {
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); }
   if (e.key === 'p') { e.preventDefault(); toggleProjects(); }
-  if (e.key === 'n') { e.preventDefault(); $('#new').click(); }
+  if (e.key === 'n') { e.preventDefault(); newTask(); }
   if (e.key === ',') { e.preventDefault(); openSettings(); }
 });
 
