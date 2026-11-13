@@ -23,7 +23,19 @@ anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one 
 
 ## Quick start
 
-Grab a binary from [Releases](https://github.com/Rishang/agent-kanban/releases/latest) (Linux amd64/arm64, macOS arm64, Windows amd64), or build one with `task build`.
+Install a prebuilt binary (Linux amd64/arm64, macOS arm64, Windows amd64):
+
+```sh
+# Linux / macOS
+curl -fsSL https://raw.githubusercontent.com/Rishang/agent-kanban/main/install.sh | bash
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/Rishang/agent-kanban/main/install.ps1 | iex
+```
+
+Both scripts download the release archive, verify its SHA-256 against `checksums.txt`, and install to a user-level directory (no admin or sudo needed when it is writable). Set `VERSION=v1.2.3` to pin a release and `INSTALL_DIR` to choose the folder. You can also grab an archive from [Releases](https://github.com/Rishang/agent-kanban/releases/latest), or build with `task build`.
 
 ```sh
 task build                       # → ./bin/agent-kanban
