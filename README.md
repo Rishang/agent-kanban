@@ -9,7 +9,7 @@
 A local kanban board your coding agents work on alongside you: Claude Code, Codex, opencode, pi,
 anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one local database, zero cloud.
 
-[Quick start](#quick-start) · [Demos](#see-it-work) · [▶ Full video](.github/videos/demo.mp4)
+[Quick start](#quick-start) · [Demos](#see-it-work) · [Download](https://github.com/Rishang/local-kanban/releases/latest)
 
 </div>
 

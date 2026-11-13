@@ -4,3 +4,4 @@ kanban.db
 kanban.db-*
 .env
 .serena/
+.github/videos/
