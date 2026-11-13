@@ -23,11 +23,15 @@ anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one 
 
 ## Quick start
 
+Grab a binary from [Releases](https://github.com/Rishang/agent-kanban/releases/latest) (Linux amd64/arm64, macOS arm64, Windows amd64), or build one with `task build`.
+
 ```sh
 task build                       # → ./bin/agent-kanban
 cd ~/code/my-app && agent-kanban # board at http://127.0.0.1:7777/#my-app
-agent-kanban skill install       # teaches Claude Code / Codex the board workflow in this project (--global: for all projects)
+agent-kanban skill sync          # downloads the board-workflow skill for Claude Code / Codex into this project (--global: for all projects)
 ```
+
+The skill is not built into the binary. `skill sync` fetches [`skills/kanban/SKILL.md`](skills/kanban/SKILL.md) from the `main` branch, so it needs internet and picks up skill updates without a new release. Re-run it to update. Use `--url` to pin a tag or point at a mirror (https only).
 
 Connect an agent (inside the repo):
 

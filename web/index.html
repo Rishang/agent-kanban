@@ -1264,7 +1264,7 @@ Vue.createApp({
       ['Claude Code (run inside the repo)', `claude mcp add --transport http kanban "${location.origin}/mcp?agent=claude&project=${S.proj}"`],
       ['Codex: ~/.codex/config.toml', `[mcp_servers.kanban]\nurl = "${location.origin}/mcp?agent=codex&project=${S.proj}"`],
       ['Any other agent (pi, opencode, …)', `${location.origin}/mcp?agent=<name>&project=${S.proj}`],
-      ['Install the kanban skill (teaches agents the workflow)', 'agent-kanban skill install'],
+      ['Sync the kanban skill (teaches agents the workflow)', 'agent-kanban skill sync'],
     ]);
     const saveSettings = () => later('settings', () => api('save_settings', clone(f.settings)).then(load).catch(load));
     const saveCols = () => later('cols', () => api('save_columns', clone(f.columns)).then(load).catch(load));

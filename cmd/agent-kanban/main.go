@@ -36,7 +36,7 @@ Usage:
   agent-kanban [serve] [--addr 127.0.0.1:7777] [--db FILE]
       Start the server and register the current project (git root, or this folder).
       If a server is already running, just register the project with it.
-  agent-kanban skill install [--global] [--dir DIR]...
+  agent-kanban skill sync [--global] [--dir DIR]... [--url URL]
   agent-kanban version
 
 Everything lives in the config folder ($AGENT_KANBAN_CONFIG_PATH, default ~/.config/kanban):
@@ -70,7 +70,7 @@ func main() {
 	case "serve":
 		err = serve(args)
 	case "skill":
-		err = installSkill(args)
+		err = syncSkill(args)
 	case "version":
 		fmt.Println(version)
 	default:
@@ -270,15 +270,20 @@ type multiFlag []string
 func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
-func installSkill(args []string) error {
-	if len(args) == 0 || args[0] != "install" {
-		return errors.New("usage: agent-kanban skill install [--global] [--dir DIR]")
+func syncSkill(args []string) error {
+	if len(args) == 0 || args[0] != "sync" {
+		return errors.New("usage: agent-kanban skill sync [--global] [--dir DIR]... [--url URL]")
 	}
-	fs := flag.NewFlagSet("skill install", flag.ExitOnError)
+	fs := flag.NewFlagSet("skill sync", flag.ExitOnError)
 	var dirs multiFlag
-	global := fs.Bool("global", false, "install for your user (~/.claude/skills, ~/.codex/skills) instead of the current project")
-	fs.Var(&dirs, "dir", "skills root to install into (repeatable); overrides the default")
+	global := fs.Bool("global", false, "sync into your user skills (~/.claude/skills, ~/.codex/skills) instead of the current project")
+	fs.Var(&dirs, "dir", "skills root to write into (repeatable); overrides the default")
+	src := fs.String("url", skill.DefaultURL, "where to download SKILL.md from (https)")
 	fs.Parse(args[1:])
+	content, err := skill.Fetch(context.Background(), *src)
+	if err != nil {
+		return err
+	}
 	if len(dirs) == 0 {
 		base, err := os.Getwd() // ponytail: cwd is the project root; no git-root lookup
 		if *global {
@@ -292,7 +297,7 @@ func installSkill(args []string) error {
 			dirs = append(dirs, filepath.Join(base, ".codex", "skills"))
 		}
 	}
-	paths, err := skill.Install(dirs...)
+	paths, err := skill.Install(content, dirs...)
 	for _, p := range paths {
 		fmt.Println("installed", p)
 	}
