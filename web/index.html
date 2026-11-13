@@ -442,11 +442,11 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
       <article v-for="t in lists[c.id]" :key="t.id" class="card" :data-id="t.id" tabindex="0" draggable="true"
         :class="{ sel: t.id === S.openId, dragging: t.id === dragId, flash: t.id === S.flashId }"
         @dragstart="dragId = t.id" @dragend="dragId = overCol = null">
-        <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="P[t.assignee]?.agent" title="Agent-managed">⚡ agent</span></div>
+        <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="member(t.assignee)?.agent" title="Agent-managed">⚡ agent</span></div>
         <div class="title">{{ t.title }}</div>
         <div class="meta">
           <span class="prio"><i :style="{ background: PRIO_COLOR[t.priority] }"></i>{{ t.priority }}</span>
-          <span v-for="l in t.labels" :key="l" class="tag" :style="L[l] ? { '--lc': L[l] } : null">{{ l }}</span>
+          <span v-for="l in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}</span>
           <span v-if="t.due" :style="overdue(t) ? 'color:var(--p-urgent)' : ''">📅 {{ t.due.slice(5) }}</span>
           <span v-if="t.checklist.length">☑ {{ done(t) }}/{{ t.checklist.length }}</span>
           <span v-if="t.comments.length">💬 {{ t.comments.length }}</span>
@@ -535,7 +535,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 
       <div class="d-sec"><h4>Comments · {{ t.comments.length }}</h4>
         <div v-for="c in t.comments" :key="c.id" class="comment"><span v-html="av(c.who)"></span><div class="bubble">
-          <div class="who"><b>{{ c.who }}</b> <span v-if="P[c.who]?.agent" class="tag">agent</span><small>{{ ago(c.t) }}</small></div>
+          <div class="who"><b>{{ c.who }}</b> <span v-if="member(c.who)?.agent" class="tag">agent</span><small>{{ ago(c.t) }}</small></div>
           <div class="md" v-md="c.text"></div></div></div>
         <p v-if="!t.comments.length" class="ph" style="margin:0 0 8px">No comments yet.</p>
         <div class="compose"><textarea v-model="cmText" placeholder="Write a comment… (markdown supported)"
@@ -556,7 +556,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
         <a v-if="/^https?:\/\//i.test(t.link || '')" :href="t.link" target="_blank" rel="noopener noreferrer" title="Open link">↗</a></div></div>
       <label class="prop"><span>Human</span><div class="hrow"><input type="checkbox" class="toggle" :checked="t.human" @change="setHuman($event.target.checked)"><small>Agents skip it</small></div></label>
       <div class="prop"><span>Labels</span><div class="chips">
-        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="L[l] ? { '--lc': L[l] } : null">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: t.labels.filter((_, j) => j !== i) })">×</button></span>
+        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: t.labels.filter((_, j) => j !== i) })">×</button></span>
         <input v-model="labelText" list="labelOpts" placeholder="+ label" @keydown.enter.prevent="addLabel" @keydown.esc.stop="labelText.trim() ? addLabel() : $event.target.blur()">
         <datalist id="labelOpts"><option v-for="l in freeLabels" :key="l" :value="l"></option></datalist></div></div>
     </div></div>
@@ -663,11 +663,12 @@ if (!window.Vue || !window.marked || !window.DOMPurify) {
   throw new Error('UI libraries failed to load');
 }
 // ---------- State (from GET /api/board, refreshed on every SSE event) ----------
-let B = { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' };
-const P = {}, L = {};               // member name → member (+short), label → color
-// Reactive state read by the Vue parts of the UI (drawer). The rest of the page still renders by hand.
-const S = Vue.reactive({ B, openId: null, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
+// All UI state. S.B is the board from GET /api/board, replaced on every SSE event.
+const S = Vue.reactive({ B: { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' }, openId: null, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
   projects: [], proj: null, pal: { q: '', n: 0 }, settingsN: 0 });
+const members = Vue.computed(() => Object.fromEntries(S.B.members.map(m => [m.name, m])));
+const labels = Vue.computed(() => Object.fromEntries(S.B.labels.map(l => [l.name, l.color])));
+const member = name => members.value[name], labelColor = name => labels.value[name];
 const PRIO = { urgent: 0, high: 1, medium: 2, low: 3 };
 const PRIO_COLOR = { urgent: 'var(--p-urgent)', high: 'var(--p-high)', medium: 'var(--p-med)', low: 'var(--p-low)' };
 // One family (Tailwind 500s): equal weight, readable as text on dark and as button fill with white text.
@@ -678,10 +679,10 @@ const PERMS = { create: 'Create tasks', edit: 'Edit fields & checklists', move: 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${s / 60 | 0}m ago` : s < 86400 ? `${s / 3600 | 0}h ago` : `${s / 86400 | 0}d ago`; };
-const byId = id => B.tasks.find(t => t.id === id);
-const colName = id => B.columns.find(c => c.id === id)?.name ?? id;
-const lastCol = () => B.columns.at(-1)?.id;
-const ME = () => B.settings.me;
+const byId = id => S.B.tasks.find(t => t.id === id);
+const colName = id => S.B.columns.find(c => c.id === id)?.name ?? id;
+const lastCol = () => S.B.columns.at(-1)?.id;
+const ME = () => S.B.settings.me;
 const randColor = () => '#' + (Math.random() * 0xffffff | 0).toString(16).padStart(6, '0');
 // Generic glyphs (not brand logos) for members; Member.icon overrides the name-based default.
 const GLYPH = {
@@ -697,10 +698,9 @@ const GLYPH = {
 };
 const AUTO_ICON = { claude: 'claude', codex: 'codex', pi: 'pi', opencode: 'opencode', gemini: 'gemini', cursor: 'cursor', copilot: 'copilot' };
 const iconOf = (name, m) => (m?.icon && GLYPH[m.icon] ? m.icon : AUTO_ICON[name]) || (m?.agent ? 'bot' : 'user');
-const av = who => { const p = P[who] || { color: '#7f848e' };
-  return `<span class="avatar" style="background:${esc(p.color)}" title="${esc(who)}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[iconOf(who, P[who])]}</svg></span>`; };
-const tag = (l, extra = '') => `<span class="tag" ${L[l] ? `style="--lc:${esc(L[l])}"` : ''}>${esc(l)}${extra}</span>`;
-const archived = t => B.settings.archiveDays > 0 && t.column === lastCol() && Date.now() - t.updated > B.settings.archiveDays * 864e5;
+const av = who => { const p = member(who) || { color: '#7f848e' };
+  return `<span class="avatar" style="background:${esc(p.color)}" title="${esc(who)}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[iconOf(who, p)]}</svg></span>`; };
+const archived = t => S.B.settings.archiveDays > 0 && t.column === lastCol() && Date.now() - t.updated > S.B.settings.archiveDays * 864e5;
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
 
 function toast(msg) {
@@ -709,7 +709,6 @@ function toast(msg) {
 }
 
 // ---------- Server ----------
-let PROJ = null, PROJECTS = [];
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   const j = await r.json().catch(() => ({}));
@@ -717,7 +716,7 @@ async function post(url, body) {
   return j;
 }
 async function api(op, body) {
-  const r = await fetch('/api/p/' + encodeURIComponent(PROJ) + '/' + op, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+  const r = await fetch('/api/p/' + encodeURIComponent(S.proj) + '/' + op, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { toast(j.error || r.statusText); throw new Error(j.error || r.statusText); }
   S.saved = 'Saved · ' + new Date().toLocaleTimeString();
@@ -727,16 +726,11 @@ async function api(op, body) {
 let reqSeq = 0, applied = 0, flashEv = null, routed = false;
 async function load() {
   const my = ++reqSeq;
-  const r = await fetch('/api/p/' + encodeURIComponent(PROJ) + '/board');
+  const r = await fetch('/api/p/' + encodeURIComponent(S.proj) + '/board');
   const b = await r.json();
   if (my < applied) return; // a newer response already landed
-  if (!r.ok) { toast(b.error || 'Project not found'); const other = PROJECTS.find(p => p.id !== PROJ); return other && switchProject(other.id); }
-  applied = my; B = Vue.reactive(b); // reactive: edits anywhere (e.g. settings) redraw the Vue parts
-  for (const k in P) delete P[k];
-  for (const k in L) delete L[k];
-  B.members.forEach(m => P[m.name] = { ...m, short: m.name.slice(0, 2).toUpperCase() });
-  B.labels.forEach(l => L[l.name] = l.color);
-  S.B = B;
+  if (!r.ok) { toast(b.error || 'Project not found'); const other = S.projects.find(p => p.id !== S.proj); return other && switchProject(other.id); }
+  applied = my; S.B = b;
   renderAll();
 }
 
@@ -744,22 +738,22 @@ async function load() {
 const projColor = id => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 50% 50%)`; };
 async function loadProjects() {
   const r = await (await fetch('/api/projects')).json();
-  PROJECTS = S.projects = r.projects || [];
+  S.projects = r.projects || [];
 }
 let lpT; const loadProjectsSoon = () => { clearTimeout(lpT); lpT = setTimeout(loadProjects, 400); };
 async function boot() {
   await loadProjects();
   const [hp] = decodeURIComponent(location.hash.slice(1)).split('/');
-  PROJ = S.proj = [hp, PROJ, store.get('kanban:project')].find(id => id && PROJECTS.some(p => p.id === id)) || PROJECTS[0]?.id;
-  if (!PROJ) return toast('No projects yet: add one from the folder icon');
-  store.set('kanban:project', PROJ);
+  S.proj = [hp, S.proj, store.get('kanban:project')].find(id => id && S.projects.some(p => p.id === id)) || S.projects[0]?.id;
+  if (!S.proj) return toast('No projects yet: add one from the folder icon');
+  store.set('kanban:project', S.proj);
   await load();
   if (!routed) { routed = true; route(); }
 }
 async function switchProject(pid, fromRoute) {
-  if (!pid || !PROJECTS.some(p => p.id === pid)) return;
-  if (openId) closeTask();
-  PROJ = S.proj = pid; store.set('kanban:project', pid);
+  if (!pid || !S.projects.some(p => p.id === pid)) return;
+  if (S.openId) closeTask();
+  S.proj = pid; store.set('kanban:project', pid);
   $('#q').value = S.q = '';
   await load();
   if (!fromRoute && decodeURIComponent(location.hash.slice(1)) !== pid) history.pushState(null, '', '#' + encodeURIComponent(pid));
@@ -775,7 +769,7 @@ $('#rBoard').onclick = () => { closeTask(); closeSettings(); };
 $('.brand').onclick = () => toggleProjects();
 // Header rename: Enter or blur saves, Esc cancels. The id (URLs, MCP ?project=) never changes.
 function renameProject(pid, el) {
-  const p = PROJECTS.find(x => x.id === pid); if (!p || !el) return;
+  const p = S.projects.find(x => x.id === pid); if (!p || !el) return;
   const inp = document.createElement('input');
   inp.value = p.name; inp.maxLength = 64; inp.setAttribute('aria-label', 'Project name');
   el.replaceWith(inp); inp.focus(); inp.select();
@@ -795,14 +789,14 @@ function renameProject(pid, el) {
   inp.onblur = () => finish(true);
 }
 async function deleteProject(pid) {
-  const p = PROJECTS.find(x => x.id === pid); if (!p) return;
-  if (PROJECTS.length <= 1) return toast("Can't delete the last project");
+  const p = S.projects.find(x => x.id === pid); if (!p) return;
+  if (S.projects.length <= 1) return toast("Can't delete the last project");
   if (prompt(`Type “${p.name}” to delete this project and all ${p.total} of its tasks`) !== p.name) return;
   if (!await post('/api/projects/remove', { id: pid }).then(() => true, () => false)) return;
   await loadProjects();
-  if (pid === PROJ) switchProject(PROJECTS[0]?.id);
+  if (pid === S.proj) switchProject(S.projects[0]?.id);
 }
-$('#boardName').onclick = e => { e.stopPropagation(); renameProject(PROJ, $('#boardName')); };
+$('#boardName').onclick = e => { e.stopPropagation(); renameProject(S.proj, $('#boardName')); };
 $('#boardName').title = 'Rename project';
 Vue.createApp({
   template: '#tpl-projects',
@@ -863,7 +857,7 @@ Vue.createApp({
       const it = items.value[i]; if (!it) return;
       closePalette();
       if (it.project) return switchProject(it.project.id);
-      if (it.hit.project !== PROJ) await switchProject(it.hit.project);
+      if (it.hit.project !== S.proj) await switchProject(it.hit.project);
       openTask(it.hit.id);
     }
     function onKey(e) {
@@ -883,7 +877,7 @@ pal.onclick = e => { if (e.target === pal) closePalette(); };
 
 function setLive(on) {
   $('#dot').classList.toggle('off', !on);
-  $('#synced').textContent = !on ? 'offline · reconnecting…' : !B.sync ? 'live' : B.sync.error ? 'live · cloud sync failing' : 'live · synced';
+  $('#synced').textContent = !on ? 'offline · reconnecting…' : !S.B.sync ? 'live' : S.B.sync.error ? 'live · cloud sync failing' : 'live · synced';
 }
 
 function connect() {
@@ -891,7 +885,7 @@ function connect() {
   es.onopen = () => { setLive(true); boot(); };
   es.onmessage = e => {
     const m = JSON.parse(e.data);
-    if (m.project === PROJ || m.via === 'sync') { flashEv = m; load(); }
+    if (m.project === S.proj || m.via === 'sync') { flashEv = m; load(); }
     loadProjectsSoon(); // counts / list
   };
   es.onerror = () => setLive(false); // EventSource reconnects by itself
@@ -904,20 +898,20 @@ function flush(key) { const p = pending[key]; if (p) { clearTimeout(p.t); delete
 const typingIn = el => el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
 
 function renderAll() {
-  $('#boardName').textContent = B.settings.board;
-  document.title = B.settings.board;
-  $('#dbName').textContent = B.db.split(/[\\/]/).pop();
+  $('#boardName').textContent = S.B.settings.board;
+  document.title = S.B.settings.board;
+  $('#dbName').textContent = S.B.db.split(/[\\/]/).pop();
   setLive(true);
-  $('.sync').title = B.db + (!B.sync ? ' · live updates' : ` · sync ${B.sync.remote}` +
-    (B.sync.error ? ` · last error: ${B.sync.error}` : B.sync.lastPull ? ` · synced ${ago(B.sync.lastPull)}` : ''));
+  $('.sync').title = S.B.db + (!S.B.sync ? ' · live updates' : ` · sync ${S.B.sync.remote}` +
+    (S.B.sync.error ? ` · last error: ${S.B.sync.error}` : S.B.sync.lastPull ? ` · synced ${ago(S.B.sync.lastPull)}` : ''));
   fillWho();
-  if (openId) {
-    if (!byId(openId)) { toast(`${openId} was deleted`); closeTask(); }
+  if (S.openId) {
+    if (!byId(S.openId)) { toast(`${S.openId} was deleted`); closeTask(); }
   }
   if (flashEv?.taskId) {
     const ev = flashEv;
     if (ev.via === 'mcp') { S.flashId = ev.taskId; setTimeout(() => S.flashId === ev.taskId && (S.flashId = null), 1400); }
-    if (ev.via === 'mcp' && ev.taskId === openId) { S.live = true; setTimeout(() => S.live = false, 2500); }
+    if (ev.via === 'mcp' && ev.taskId === S.openId) { S.live = true; setTimeout(() => S.live = false, 2500); }
   }
   flashEv = null;
 }
@@ -933,8 +927,8 @@ function sorted(list) {
 
 function fillWho() {
   const sel = $('#who'), v = sel.value;
-  sel.innerHTML = '<option value="">All assignees</option>' + B.members.map(m => `<option>${esc(m.name)}</option>`).join('');
-  sel.value = P[v] ? v : ''; S.who = sel.value;
+  sel.innerHTML = '<option value="">All assignees</option>' + S.B.members.map(m => `<option>${esc(m.name)}</option>`).join('');
+  sel.value = member(v) ? v : ''; S.who = sel.value;
 }
 
 // ---------- Side panel (Vue): Activity timeline or by-task tree, connected agents, tools ----------
@@ -1013,7 +1007,7 @@ Vue.createApp({
       await api('create_task', { title: v, column: col }).catch(() => {});
       await load(); quickEl.value?.focus(); // stay open for the next one
     }
-    return { S, P, L, PRIO_COLOR, av, dragId, overCol, quickCol, quickText, quickEl,
+    return { S, member, labelColor, PRIO_COLOR, av, dragId, overCol, quickCol, quickText, quickEl,
       lists, total, done, overdue, onOver, onDrop, openQuick, addQuick };
   },
 }).mount('#board');
@@ -1062,28 +1056,27 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
 }
 
 // ---------- Drawer (task details, autosave) ----------
-let openId = null;
 const drawer = $('#drawer');
 
 function openTask(id) {
-  closeSettings(); openId = S.openId = id; drawer.classList.add('open'); $('#scrim').classList.add('show');
-  const h = PROJ + '/' + id;
-  if (decodeURIComponent(location.hash.slice(1)) !== h) history.pushState(null, '', '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(id));
+  closeSettings(); S.openId = id; drawer.classList.add('open'); $('#scrim').classList.add('show');
+  const h = S.proj + '/' + id;
+  if (decodeURIComponent(location.hash.slice(1)) !== h) history.pushState(null, '', '#' + encodeURIComponent(S.proj) + '/' + encodeURIComponent(id));
 }
 function closeTask() {
-  if (!openId) return;
-  flush('title'); flush('desc'); openId = S.openId = null; drawer.classList.remove('open'); if (!settingsEl.classList.contains('open')) $('#scrim').classList.remove('show');
-  if (decodeURIComponent(location.hash.slice(1)) !== PROJ) history.pushState(null, '', '#' + encodeURIComponent(PROJ));
+  if (!S.openId) return;
+  flush('title'); flush('desc'); S.openId = null; drawer.classList.remove('open'); if (!settingsEl.classList.contains('open')) $('#scrim').classList.remove('show');
+  if (decodeURIComponent(location.hash.slice(1)) !== S.proj) history.pushState(null, '', '#' + encodeURIComponent(S.proj));
 }
 // URLs: http://host/#project opens a board, #project/KB-12 a task; back/forward work.
 async function route() {
   const [pid, id] = decodeURIComponent(location.hash.slice(1)).split('/');
-  if (pid && pid !== PROJ) {
-    if (!PROJECTS.some(p => p.id === pid)) return toast(`Project ${pid} not found`);
+  if (pid && pid !== S.proj) {
+    if (!S.projects.some(p => p.id === pid)) return toast(`Project ${pid} not found`);
     await switchProject(pid, true);
   }
   if (!id) return closeTask();
-  if (id === openId) return;
+  if (id === S.openId) return;
   if (byId(id)) openTask(id); else toast(`Task ${id} not found`);
 }
 window.addEventListener('hashchange', route);
@@ -1115,7 +1108,7 @@ function renderMd(el, text) {
 }
 const rethemeMd = () => document.querySelectorAll('.md').forEach(el => el._md != null && renderMd(el, el._md)); // re-theme mermaid
 
-const patch = fields => api('update_task', { id: openId, ...fields }).then(load).catch(() => load());
+const patch = fields => api('update_task', { id: S.openId, ...fields }).then(load).catch(() => load());
 
 Vue.createApp({
   template: '#tpl-drawer',
@@ -1167,7 +1160,7 @@ Vue.createApp({
     async function addCheck() { const v = ckText.value.trim(); if (!v) return; ckText.value = ''; await patch({ checklist: [...t.value.checklist, { text: v, done: false }] }); }
     async function addLabel() {
       const v = labelText.value.trim(); if (!v) return;
-      if (!L[v]) { // new label: add it to the board first
+      if (!labelColor(v)) { // new label: add it to the board first
         if (!confirm(`Create new label “${v}”?`)) return;
         await api('save_labels', [...S.B.labels, { name: v, color: randColor() }]).catch(() => {});
       }
@@ -1182,7 +1175,7 @@ Vue.createApp({
     const move = col => api('move_task', { id: t.value.id, column: col }).then(load).catch(() => load());
     const setHuman = v => api('set_human', { id: t.value.id, human: v }).then(load).catch(() => load());
     async function copyLink() {
-      await navigator.clipboard?.writeText(location.origin + location.pathname + '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(t.value.id)).catch(() => {});
+      await navigator.clipboard?.writeText(location.origin + location.pathname + '#' + encodeURIComponent(S.proj) + '/' + encodeURIComponent(t.value.id)).catch(() => {});
       copied.value = true; setTimeout(() => copied.value = false, 1200);
     }
     function toggleWide() {
@@ -1194,7 +1187,7 @@ Vue.createApp({
       const id = t.value.id; closeTask();
       await api('delete_task', { id }).catch(() => {}); load();
     }
-    return { S, P, L, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
+    return { S, member, labelColor, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
       ago, av, colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
       toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, deleteTask };
   },
@@ -1219,7 +1212,7 @@ setAccent(store.get('kanban:accent'));
 
 // ---------- Settings ----------
 const settingsEl = $('#settings');
-function openSettings() { if (openId) closeTask(); S.settingsN++; settingsEl.classList.add('open'); $('#scrim').classList.add('show'); }
+function openSettings() { if (S.openId) closeTask(); S.settingsN++; settingsEl.classList.add('open'); $('#scrim').classList.add('show'); }
 function closeSettings() { if (!settingsEl.classList.contains('open')) return; Object.keys(pending).forEach(flush); settingsEl.classList.remove('open'); $('#scrim').classList.remove('show'); }
 $('#settingsBtn').onclick = openSettings;
 
@@ -1267,7 +1260,7 @@ Vue.createApp({
     }
     async function addLabel() {
       const v = newLabel.value.trim(); if (!v) return;
-      if (L[v]) return toast(`Label “${v}” already exists`);
+      if (labelColor(v)) return toast(`Label “${v}” already exists`);
       newLabel.value = ''; await act(() => api('save_labels', [...clone(f.labels), { name: v, color: randColor() }]));
     }
     function delMember(i) {
@@ -1276,7 +1269,7 @@ Vue.createApp({
     }
     async function addMember() {
       const name = newMember.value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 32);
-      if (!name || P[name]) return toast(name ? `${name} already exists` : 'Invalid name');
+      if (!name || member(name)) return toast(name ? `${name} already exists` : 'Invalid name');
       newMember.value = ''; await act(() => api('save_members', [...clone(f.members), { name, color: randColor(), agent: false }]));
     }
     async function copy(code, i) { await navigator.clipboard?.writeText(code).catch(() => {}); copied.value = i; setTimeout(() => copied.value = -1, 1500); }
@@ -1323,7 +1316,7 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return pal.classList.contains('open') ? closePalette() : openPalette(); }
   if (e.key === 'Escape' && pal.classList.contains('open')) return closePalette();
   if (e.key === 'Escape' && projPanel.classList.contains('open')) return toggleProjects(false);
-  if (e.key === 'Escape' && openId) return closeTask();
+  if (e.key === 'Escape' && S.openId) return closeTask();
   if (e.key === 'Escape') return closeSettings();
   if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Enter' && e.target.matches('.card')) openTask(e.target.dataset.id);
