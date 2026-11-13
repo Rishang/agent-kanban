@@ -403,7 +403,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
             <span class="pid" v-html="hl(it.hit.id, words)"></span>
             <span class="pt">{{ it.hit.human ? '👤 ' : '' }}<span v-html="hl(it.hit.title, words)"></span></span>
             <span class="pm"><span class="tag" :style="{ '--lc': projColor(it.hit.project) }">{{ it.hit.projectName }}</span><span>{{ it.hit.columnName }}</span>
-              <span class="prio"><i :style="{ background: PRIO_COLOR[it.hit.priority] }"></i></span><span v-if="it.hit.assignee" style="display:contents" v-html="av(it.hit.assignee)"></span></span>
+              <span class="prio"><i :style="{ background: PRIO_COLOR[it.hit.priority] }"></i></span><avatar v-if="it.hit.assignee" :who="it.hit.assignee" /></span>
             <span v-if="it.hit.snippet" class="ps"><i>{{ it.hit.where }}:</i> <span v-html="hl(it.hit.snippet, words)"></span></span>
           </template>
         </div>
@@ -457,7 +457,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
           <span v-if="t.checklist.length">☑ {{ done(t) }}/{{ t.checklist.length }}</span>
           <span v-if="t.comments.length">💬 {{ t.comments.length }}</span>
           <span v-if="t.link" title="Has a link">🔗</span>
-          <span v-if="t.assignee" style="display:contents" v-html="av(t.assignee)"></span>
+          <avatar v-if="t.assignee" :who="t.assignee" />
         </div>
         <div v-if="t.checklist.length" class="progress"><span :style="{ width: done(t) / t.checklist.length * 100 + '%' }"></span></div>
       </article>
@@ -480,21 +480,21 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
     <ul class="feed">
       <template v-if="mode === 'time'">
         <li v-for="(e, i) in S.B.events" :key="i" :class="{ link: openable(e.taskId) }" :data-open="openable(e.taskId) ? e.taskId : null">
-          <span style="display:contents" v-html="av(e.who)"></span><div><b>{{ e.who }}</b> {{ e.action }} <code v-if="e.taskId">{{ e.taskId }}</code> {{ e.detail }}<small>{{ since(e.t) }} · via {{ e.via }}</small></div></li>
+          <avatar :who="e.who" /><div><b>{{ e.who }}</b> {{ e.action }} <code v-if="e.taskId">{{ e.taskId }}</code> {{ e.detail }}<small>{{ since(e.t) }} · via {{ e.via }}</small></div></li>
       </template>
       <template v-else>
         <li v-for="g in groups" :key="g.key" class="tgroup" :class="{ closed: collapsed.has(g.key) }">
           <div class="tg-head"><button class="caret" aria-label="Collapse" @click.stop="toggle(g.key)">▾</button>
             <code v-if="g.id">{{ g.id }}</code><span class="tt" :data-open="g.task ? g.id : null" :title="g.title">{{ g.title }}</span>
             <small>{{ g.count }} · {{ since(g.t) }}</small></div>
-          <div class="tg-kids"><div v-for="(r, i) in g.rows" :key="i" class="row"><span style="display:contents" v-html="av(r.who)"></span>
+          <div class="tg-kids"><div v-for="(r, i) in g.rows" :key="i" class="row"><avatar :who="r.who" />
             <div><b>{{ r.who }}</b> {{ r.action }} {{ r.detail }}<span v-if="r.n > 1" class="x">×{{ r.n }}</span><small>{{ since(r.t) }} · via {{ r.via }}</small></div></div></div></li>
       </template>
       <li v-if="!S.B.events.length" class="ph">No activity yet.</li>
     </ul></div>
   <div class="pane mcp" :class="{ on: tab === 'mcp' }">
     <h4>Connected agents</h4>
-    <div v-for="m in live" :key="m.name" class="agent"><span style="display:contents" v-html="av(m.name)"></span><span>{{ m.name }}</span>
+    <div v-for="m in live" :key="m.name" class="agent"><avatar :who="m.name" /><span>{{ m.name }}</span>
       <span class="st on" :title="'Last call ' + since(S.B.seen[m.name])" role="img" aria-label="connected"></span></div>
     <p v-if="!live.length" class="ph">No agent connected in the last 5 minutes. Setup: Settings → MCP &amp; skill.</p>
     <h4 style="margin-top:16px">Exposed tools</h4>
@@ -540,7 +540,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
         <input class="add-line" v-model="ckText" placeholder="+ Add item" @keydown.enter="addCheck" @keydown.esc.stop="ckText = ''; $event.target.blur()"></div>
 
       <div class="d-sec"><h4>Comments · {{ t.comments.length }}</h4>
-        <div v-for="c in t.comments" :key="c.id" class="comment"><span v-html="av(c.who)"></span><div class="bubble">
+        <div v-for="c in t.comments" :key="c.id" class="comment"><avatar :who="c.who" /><div class="bubble">
           <div class="who"><b>{{ c.who }}</b> <span v-if="member(c.who)?.agent" class="tag">agent</span><small>{{ ago(c.t) }}</small></div>
           <div class="md" v-md="c.text"></div></div></div>
         <p v-if="!t.comments.length" class="ph" style="margin:0 0 8px">No comments yet.</p>
@@ -562,7 +562,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
         <a v-if="/^https?:\/\//i.test(t.link || '')" :href="t.link" target="_blank" rel="noopener noreferrer" title="Open link">↗</a></div></div>
       <label class="prop"><span>Human</span><div class="hrow"><input type="checkbox" class="toggle" :checked="t.human" @change="setHuman($event.target.checked)"><small>Agents skip it</small></div></label>
       <div class="prop"><span>Labels</span><div class="chips">
-        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: t.labels.filter((_, j) => j !== i) })">×</button></span>
+        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: without(t.labels, i) })">×</button></span>
         <input v-model="labelText" list="labelOpts" placeholder="+ label" @keydown.enter.prevent="addLabel" @keydown.esc.stop="labelText.trim() ? addLabel() : $event.target.blur()">
         <datalist id="labelOpts"><option v-for="l in freeLabels" :key="l" :value="l"></option></datalist></div></div>
     </div></div>
@@ -623,7 +623,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
       </section>
 
       <section class="s-sec" id="s-members"><h3>Members &amp; agents</h3><p>Shared by every project. Agents identify themselves with <code>?agent=name</code> on the MCP URL; unknown names join automatically as agents.</p>
-        <div class="list"><div v-for="(m, i) in f.members" :key="m.name" class="row-i"><span style="display:contents" v-html="av(m.name)"></span>
+        <div class="list"><div v-for="(m, i) in f.members" :key="m.name" class="row-i"><avatar :who="m.name" />
           <b class="grow">{{ m.name }}</b><span v-if="m.name === ME()" class="muted">you</span>
           <input type="color" v-model="m.color" aria-label="Color" @input="saveMembers">
           <select class="inp" style="width:110px;flex:none" :value="iconOf(m.name, m)" aria-label="Icon" @change="m.icon = $event.target.value; saveMembers()">
@@ -704,10 +704,16 @@ const GLYPH = {
 };
 const AUTO_ICON = { claude: 'claude', codex: 'codex', pi: 'pi', opencode: 'opencode', gemini: 'gemini', cursor: 'cursor', copilot: 'copilot' };
 const iconOf = (name, m) => (m?.icon && GLYPH[m.icon] ? m.icon : AUTO_ICON[name]) || (m?.agent ? 'bot' : 'user');
-const av = who => { const p = member(who) || { color: '#7f848e' };
-  return `<span class="avatar" style="background:${esc(p.color)}" title="${esc(who)}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[iconOf(who, p)]}</svg></span>`; };
 const archived = t => S.B.settings.archiveDays > 0 && t.column === lastCol() && Date.now() - t.updated > S.B.settings.archiveDays * 864e5;
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+const clone = x => JSON.parse(JSON.stringify(x));
+const without = (a, i) => a.filter((_, k) => k !== i);
+const doneCount = t => t?.checklist.filter(c => c.done).length ?? 0;
+const readHash = () => decodeURIComponent(location.hash.slice(1));
+const hashOf = (...parts) => '#' + parts.map(encodeURIComponent).join('/');
+const setHash = (...parts) => { if (readHash() !== parts.join('/')) history.pushState(null, '', hashOf(...parts)); };
+const loadScript = (src, integrity) => new Promise((onload, onerror) =>
+  document.head.append(Object.assign(document.createElement('script'), { src, integrity, crossOrigin: 'anonymous', onload, onerror })));
 
 function toast(msg) {
   const el = $('#toast'); el.textContent = msg; el.classList.add('show');
@@ -730,12 +736,12 @@ async function post(url, body) {
   return j;
 }
 async function api(op, body) {
-  const r = await fetch('/api/p/' + encodeURIComponent(S.proj) + '/' + op, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) { toast(j.error || r.statusText); throw new Error(j.error || r.statusText); }
+  const j = await post('/api/p/' + encodeURIComponent(S.proj) + '/' + op, body);
   S.saved = 'Saved · ' + new Date().toLocaleTimeString();
   return j;
 }
+// Run an op, then reload the board whether it worked or not (a failure already showed a toast).
+const save = (op, body) => api(op, body).catch(() => {}).then(load);
 
 let reqSeq = 0, applied = 0, flashEv = null, routed = false;
 async function load() {
@@ -757,7 +763,7 @@ async function loadProjects() {
 let lpT; const loadProjectsSoon = () => { clearTimeout(lpT); lpT = setTimeout(loadProjects, 400); };
 async function boot() {
   await loadProjects();
-  const [hp] = decodeURIComponent(location.hash.slice(1)).split('/');
+  const [hp] = readHash().split('/');
   S.proj = [hp, S.proj, store.get('kanban:project')].find(id => id && S.projects.some(p => p.id === id)) || S.projects[0]?.id;
   if (!S.proj) return toast('No projects yet: add one from the folder icon');
   store.set('kanban:project', S.proj);
@@ -770,7 +776,7 @@ async function switchProject(pid, fromRoute) {
   S.proj = pid; store.set('kanban:project', pid);
   S.q = '';
   await load();
-  if (!fromRoute && decodeURIComponent(location.hash.slice(1)) !== pid) history.pushState(null, '', '#' + encodeURIComponent(pid));
+  if (!fromRoute) setHash(pid);
 }
 function toggleProjects(on = !S.projOpen) { S.projOpen = on; store.set('kanban:projects', on ? '1' : null); }
 toggleProjects(store.get('kanban:projects') === '1');
@@ -795,6 +801,23 @@ async function deleteProject(pid) {
   if (pid === S.proj) switchProject(S.projects[0]?.id);
 }
 
+// ---------- Shared by every Vue app: template globals, <avatar>, v-md ----------
+const Avatar = {
+  props: { who: String },
+  computed: { m() { return member(this.who); }, glyph() { return GLYPH[iconOf(this.who, this.m)]; } },
+  template: `<span class="avatar" :style="{ background: m?.color || '#7f848e' }" :title="who"><svg viewBox="0 0 24 24" fill="none" stroke="#fff"
+    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="glyph"></svg></span>`,
+};
+// v-md: sanitized markdown + mermaid/svg/highlight, re-rendered only when the text changes (rethemeMd: theme).
+const vMd = {
+  mounted(el, b) { el._md = b.value; renderMd(el, b.value); },
+  updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
+};
+const shared = { install(app) {
+  Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without });
+  app.component('avatar', Avatar).directive('md', vMd);
+} };
+
 // ---------- Header (Vue): project name (click to rename), live status, board filters ----------
 Vue.createApp({
   template: '#tpl-header',
@@ -811,9 +834,9 @@ Vue.createApp({
       : !S.B.sync ? 'live' : S.B.sync.error ? 'live · cloud sync failing' : 'live · synced');
     const syncTitle = Vue.computed(() => S.B.db + (!S.B.sync ? ' · live updates' : ` · sync ${S.B.sync.remote}` +
       (S.B.sync.error ? ` · last error: ${S.B.sync.error}` : S.B.sync.lastPull ? ` · synced ${ago(S.B.sync.lastPull)}` : '')));
-    return { S, renaming, newName, nameEl, dbName, status, syncTitle, startRename, saveName, toggleProjects, newTask };
+    return { renaming, newName, nameEl, dbName, status, syncTitle, startRename, saveName, toggleProjects, newTask };
   },
-}).mount('header');
+}).use(shared).mount('header');
 Vue.watchEffect(() => document.title = S.B.settings.board || 'Local Kanban');
 Vue.createApp({
   template: '#tpl-projects',
@@ -833,9 +856,9 @@ Vue.createApp({
       name.value = dir.value = '';
       await loadProjects(); switchProject(p.id);
     }
-    return { S, renaming, newName, name, dir, renameEl, nameEl, projColor, toggleProjects, switchProject, deleteProject, startRename, saveRename, add };
+    return { renaming, newName, name, dir, renameEl, nameEl, toggleProjects, switchProject, deleteProject, startRename, saveRename, add };
   },
-}).mount('#projApp');
+}).use(shared).mount('#projApp');
 
 // ---------- Command palette: search every project ----------
 const pal = $('#palette');
@@ -884,9 +907,9 @@ Vue.createApp({
       q.value = (q.value.trim() + ' ' + f).trim() + (f.endsWith(':') || f === '@' ? '' : ' ');
       inEl.value?.focus(); search();
     }
-    return { q, items, sel, words, inEl, resEl, FILTERS, PRIO_COLOR, hl, av, projColor, group, soon, choose, onKey, insert };
+    return { q, items, sel, words, inEl, resEl, FILTERS, hl, group, soon, choose, onKey, insert };
   },
-}).mount('#palApp');
+}).use(shared).mount('#palApp');
 pal.onclick = e => { if (e.target === pal) closePalette(); };
 
 function connect() {
@@ -967,9 +990,9 @@ Vue.createApp({
           title: k ? (task ? task.title : (evs.find(e => e.detail && /created|deleted/.test(e.action))?.detail || 'deleted task')) : 'Board' };
       });
     });
-    return { S, TOOLS, tab, mode, collapsed, live, groups, since, setMode, toggle, openable, av };
+    return { TOOLS, tab, mode, collapsed, live, groups, since, setMode, toggle, openable };
   },
-}).mount('#sideApp');
+}).use(shared).mount('#sideApp');
 
 // ---------- Board (Vue) ----------
 Vue.createApp({
@@ -985,7 +1008,6 @@ Vue.createApp({
     const lists = Vue.computed(() => Object.fromEntries(S.B.columns.map(c => [c.id, sorted(visible.value.filter(t => t.column === c.id))])));
     const totals = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) if (!archived(t)) n[t.column] = (n[t.column] || 0) + 1; return n; });
     const total = col => totals.value[col] || 0;
-    const done = t => t.checklist.filter(c => c.done).length;
     const overdue = t => t.due && t.column !== lastCol() && t.due < new Date().toISOString().slice(0, 10);
     function onOver(e, col) { if (!dragId.value) return; e.preventDefault(); overCol.value = col; }
     async function onDrop(e, col) {
@@ -1005,10 +1027,10 @@ Vue.createApp({
       await api('create_task', { title: v, column: col }).catch(() => {});
       await load(); quickEl.value?.focus(); // stay open for the next one
     }
-    return { S, member, labelColor, PRIO_COLOR, av, dragId, overCol, quickCol, quickText, quickEl,
-      lists, total, done, overdue, onOver, onDrop, openQuick, addQuick };
+    return { dragId, overCol, quickCol, quickText, quickEl,
+      lists, total, done: doneCount, overdue, onOver, onDrop, openQuick, addQuick };
   },
-}).mount('#board');
+}).use(shared).mount('#board');
 
 // ---------- Markdown (sanitized: agents write this) + mermaid ----------
 DOMPurify.addHook('afterSanitizeAttributes', n => { if (n.tagName === 'A') { n.target = '_blank'; n.rel = 'noopener noreferrer'; } });
@@ -1023,7 +1045,7 @@ function mermaidify(root) {
   });
   if (!nodes.length) return;
   // ponytail: 5 MB lib, loaded only when a diagram is on screen
-  mermaidP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js'; s.integrity = 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.append(s); });
+  mermaidP ??= loadScript('https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js', 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE');
   mermaidP.then(() => {
     mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: isDark() ? 'dark' : 'default' });
     return mermaid.run({ nodes });
@@ -1046,7 +1068,7 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
   const blocks = [...root.querySelectorAll('pre code')];
   if (!blocks.length) return;
   // ponytail: ~130 KB, loaded only when a code block is on screen
-  hljsP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js'; s.integrity = 'sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.append(s); })
+  hljsP ??= loadScript('https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js', 'sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix')
     .then(() => hljs.configure({ ignoreUnescapedHTML: true }));
   hljsP.then(() => blocks.forEach(b => {
     if (!b.dataset.highlighted && (!/language-/.test(b.className) || hljs.getLanguage(b.className.match(/language-([\w+-]+)/)?.[1] || ''))) hljs.highlightElement(b);
@@ -1058,17 +1080,16 @@ const drawer = $('#drawer');
 
 function openTask(id) {
   closeSettings(); S.openId = id;
-  const h = S.proj + '/' + id;
-  if (decodeURIComponent(location.hash.slice(1)) !== h) history.pushState(null, '', '#' + encodeURIComponent(S.proj) + '/' + encodeURIComponent(id));
+  setHash(S.proj, id);
 }
 function closeTask() {
   if (!S.openId) return;
   flush('title'); flush('desc'); S.openId = null;
-  if (decodeURIComponent(location.hash.slice(1)) !== S.proj) history.pushState(null, '', '#' + encodeURIComponent(S.proj));
+  setHash(S.proj);
 }
 // URLs: http://host/#project opens a board, #project/KB-12 a task; back/forward work.
 async function route() {
-  const [pid, id] = decodeURIComponent(location.hash.slice(1)).split('/');
+  const [pid, id] = readHash().split('/');
   if (pid && pid !== S.proj) {
     if (!S.projects.some(p => p.id === pid)) return toast(`Project ${pid} not found`);
     await switchProject(pid, true);
@@ -1095,29 +1116,23 @@ const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight
 // Typed-text draft: while a field is focused it shows the draft, so a live reload can't overwrite it.
 const draft = () => Vue.reactive({ draft: null, orig: '', start(v) { this.draft = v; this.orig = v; }, end() { this.draft = null; } });
 
-// v-md: sanitized markdown + mermaid/svg/highlight, re-rendered only when the text changes (rethemeMd: theme).
-const vMd = {
-  mounted(el, b) { el._md = b.value; renderMd(el, b.value); },
-  updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
-};
 function renderMd(el, text) {
   el.innerHTML = text ? md(text) : `<span class="ph">${esc(el.dataset.ph || '')}</span>`;
   mermaidify(el); svgify(el); highlightCode(el);
 }
 const rethemeMd = () => document.querySelectorAll('.md').forEach(el => el._md != null && renderMd(el, el._md)); // re-theme mermaid
 
-const patch = fields => api('update_task', { id: S.openId, ...fields }).then(load).catch(() => load());
+const patch = fields => save('update_task', { id: S.openId, ...fields });
 
 Vue.createApp({
   template: '#tpl-drawer',
-  directives: { md: vMd },
   setup() {
     const t = Vue.computed(() => S.B.tasks.find(x => x.id === S.openId));
     const title = draft(), desc = draft();
     const editingDesc = Vue.ref(false), ckText = Vue.ref(''), cmText = Vue.ref(''), labelText = Vue.ref(''), copied = Vue.ref(false);
     const titleEl = Vue.ref(null), descEl = Vue.ref(null);
     Vue.watch(() => S.openId, () => { editingDesc.value = false; title.end(); desc.end(); ckText.value = cmText.value = labelText.value = ''; });
-    const done = Vue.computed(() => t.value?.checklist.filter(c => c.done).length ?? 0);
+    const done = Vue.computed(() => doneCount(t.value));
     const freeLabels = Vue.computed(() => S.B.labels.map(l => l.name).filter(l => !t.value?.labels.includes(l)));
     Vue.onUpdated(() => titleEl.value && grow(titleEl.value));
 
@@ -1125,7 +1140,7 @@ Vue.createApp({
       grow(e.target); title.draft = e.target.value; const id = t.value.id, v = title.draft;
       if (!v.trim()) return;
       t.value.title = v; // shown after blur and on refocus, before the save lands
-      later('title', () => api('update_task', { id, title: v }).then(load).catch(() => load())); // this task, even if another opens first
+      later('title', () => save('update_task', { id, title: v })); // this task, even if another opens first
     }
     const endTitle = () => { title.end(); flush('title'); };
     function cancelTitle(e) {
@@ -1153,8 +1168,8 @@ Vue.createApp({
       if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
       e.preventDefault(); e.stopPropagation(); flush('title'); flush('desc'); e.target.blur?.(); closeTask();
     }
-    const toggleCheck = (i, v) => { const ck = structuredClone(Vue.toRaw(t.value.checklist)); ck[i].done = v; patch({ checklist: ck }); };
-    const removeCheck = i => patch({ checklist: t.value.checklist.filter((_, j) => j !== i) });
+    const toggleCheck = (i, v) => { const ck = clone(t.value.checklist); ck[i].done = v; patch({ checklist: ck }); };
+    const removeCheck = i => patch({ checklist: without(t.value.checklist, i) });
     async function addCheck() { const v = ckText.value.trim(); if (!v) return; ckText.value = ''; await patch({ checklist: [...t.value.checklist, { text: v, done: false }] }); }
     async function addLabel() {
       const v = labelText.value.trim(); if (!v) return;
@@ -1170,10 +1185,10 @@ Vue.createApp({
       await api('add_comment', { id: t.value.id, text: v }).then(() => { cmText.value = ''; }).catch(() => {});
       load();
     }
-    const move = col => api('move_task', { id: t.value.id, column: col }).then(load).catch(() => load());
-    const setHuman = v => api('set_human', { id: t.value.id, human: v }).then(load).catch(() => load());
+    const move = col => save('move_task', { id: t.value.id, column: col });
+    const setHuman = v => save('set_human', { id: t.value.id, human: v });
     async function copyLink() {
-      await navigator.clipboard?.writeText(location.origin + location.pathname + '#' + encodeURIComponent(S.proj) + '/' + encodeURIComponent(t.value.id)).catch(() => {});
+      await navigator.clipboard?.writeText(location.origin + location.pathname + hashOf(S.proj, t.value.id)).catch(() => {});
       copied.value = true; setTimeout(() => copied.value = false, 1200);
     }
     function toggleWide() {
@@ -1185,11 +1200,11 @@ Vue.createApp({
       const id = t.value.id; closeTask();
       await api('delete_task', { id }).catch(() => {}); load();
     }
-    return { S, member, labelColor, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
-      ago, av, colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
+    return { member, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
+      colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
       toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, deleteTask };
   },
-}).mount('#dApp');
+}).use(shared).mount('#dApp');
 
 // ---------- Appearance (per browser) ----------
 function setTheme(v) {
@@ -1214,7 +1229,6 @@ function openSettings() { if (S.openId) closeTask(); S.settingsN++; S.settingsOp
 function closeSettings() { if (!S.settingsOpen) return; Object.keys(pending).forEach(flush); S.settingsOpen = false; }
 $('#settingsBtn').onclick = openSettings;
 
-const clone = x => JSON.parse(JSON.stringify(x));
 Vue.createApp({
   template: '#tpl-settings',
   setup() {
@@ -1238,14 +1252,14 @@ Vue.createApp({
       ['Any other agent (pi, opencode, …)', `${location.origin}/mcp?agent=<name>&project=${S.proj}`],
       ['Sync the kanban skill (teaches agents the workflow)', 'agent-kanban skill sync'],
     ]);
-    const saveSettings = () => later('settings', () => api('save_settings', clone(f.settings)).then(load).catch(load));
-    const saveCols = () => later('cols', () => api('save_columns', clone(f.columns)).then(load).catch(load));
-    const saveMembers = () => later('members', () => api('save_members', clone(f.members)).then(load).catch(load));
-    const saveLabels = () => later('labels', () => api('save_labels', clone(f.labels)).then(load).catch(load));
+    const saveSettings = () => later('settings', () => save('save_settings', clone(f.settings)));
+    const saveCols = () => later('cols', () => save('save_columns', clone(f.columns)));
+    const saveMembers = () => later('members', () => save('save_members', clone(f.members)));
+    const saveLabels = () => later('labels', () => save('save_labels', clone(f.labels)));
     const setHeader = () => S.B.settings.board = f.settings.board;
     const act = async fn => { try { await fn(); } catch { /* toast already shown */ } await refresh(); };
     const moveCol = (i, d) => act(() => { const c = clone(f.columns); [c[i], c[i + d]] = [c[i + d], c[i]]; return api('save_columns', c); });
-    const delCol = i => act(() => api('save_columns', clone(f.columns).filter((_, j) => j !== i)));
+    const delCol = i => act(() => api('save_columns', without(clone(f.columns), i)));
     async function addCol() {
       await act(() => api('save_columns', [...clone(f.columns), { id: 'c' + Date.now().toString(36), name: 'New column', color: '#7f848e' }]));
       await Vue.nextTick(); mainEl.value?.querySelector('#s-columns .row-i:last-child .grow')?.select();
@@ -1254,7 +1268,7 @@ Vue.createApp({
     function delLabel(i) {
       const l = f.labels[i];
       if (l.tasks && !confirm(`Remove “${l.name}” from ${l.tasks} task(s)?`)) return;
-      act(() => api('save_labels', clone(f.labels).filter((_, j) => j !== i)));
+      act(() => api('save_labels', without(clone(f.labels), i)));
     }
     async function addLabel() {
       const v = newLabel.value.trim(); if (!v) return;
@@ -1263,7 +1277,7 @@ Vue.createApp({
     }
     function delMember(i) {
       if (!confirm(`Remove ${f.members[i].name}? Their tasks become unassigned.`)) return;
-      act(() => api('save_members', clone(f.members).filter((_, j) => j !== i)));
+      act(() => api('save_members', without(clone(f.members), i)));
     }
     async function addMember() {
       const name = newMember.value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 32);
@@ -1280,14 +1294,14 @@ Vue.createApp({
       } catch (err) { toast('Import failed: ' + err.message); }
     }
     function deleteAll() { if (confirm(`Delete all ${S.B.tasks.length} tasks? This cannot be undone.`)) act(() => api('delete_all_tasks')); }
-    return { S, f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets,
+    return { f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets,
       ARCHIVE: [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']],
       THEMES: [['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']], ACCENTS, PERMS, GLYPH,
-      av, ago, iconOf, ME, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
+      iconOf, ME, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
       saveSettings, saveCols, saveMembers, saveLabels, moveCol, delCol, addCol, renameLabel, delLabel, addLabel,
       delMember, addMember, copy, importFile, deleteAll };
   },
-}).mount('#setApp');
+}).use(shared).mount('#setApp');
 
 // ---------- Controls ----------
 document.addEventListener('click', e => {
