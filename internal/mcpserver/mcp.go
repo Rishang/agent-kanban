@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Rishang/local-kanban/internal/store"
+	"github.com/Rishang/agent-kanban/internal/store"
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -59,9 +59,10 @@ type CreateMany struct {
 	Tasks []store.TaskInput `json:"tasks" jsonschema:"tasks to create, in order"`
 }
 
-// noDue is the MCP input schema for T without any "due" property: due dates are set by humans in
-// the UI, agents are not asked for them (and sending one is rejected by schema validation).
-func noDue[T any]() *jsonschema.Schema {
+// agentSchema is the MCP input schema for T as agents see it:
+//   - no "due" property: due dates are set by humans in the UI (sending one is rejected by schema validation);
+//   - "priority" is an enum of store.Priorities, so clients can check it before calling.
+func agentSchema[T any]() *jsonschema.Schema {
 	sc, err := jsonschema.For[T](nil)
 	if err != nil {
 		panic(err)
@@ -72,6 +73,15 @@ func noDue[T any]() *jsonschema.Schema {
 			return
 		}
 		delete(s.Properties, "due")
+		if pr := s.Properties["priority"]; pr != nil {
+			pr.Enum = []any{""} // "" = the default (medium), as the store treats it
+			for _, v := range store.Priorities {
+				pr.Enum = append(pr.Enum, v)
+			}
+			if slices.Contains(pr.Types, "null") { // optional *string in patches
+				pr.Enum = append(pr.Enum, nil)
+			}
+		}
 		for _, p := range s.Properties {
 			strip(p)
 		}
@@ -306,7 +316,7 @@ func checkDone(cl []store.Check) string {
 
 func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 	link := baseURL + "/#" + s.ProjectID() + "/"
-	srv := mcp.NewServer(&mcp.Implementation{Name: "local-kanban", Version: version}, &mcp.ServerOptions{
+	srv := mcp.NewServer(&mcp.Implementation{Name: "agent-kanban", Version: version}, &mcp.ServerOptions{
 		Instructions: "Kanban board for project " + s.ProjectID() + ", shared live with the humans on this project. " +
 			"Use it proactively for any non-trivial coding work:\n" +
 			"1. next_task (or my_tasks) to see what to work on; create_task / create_tasks when the user asks for work that has no task yet.\n" +
@@ -606,7 +616,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		return s.CreateTask(agent, "mcp", in)
 	}
 
-	mcp.AddTool(srv, &mcp.Tool{Name: "create_task", InputSchema: noDue[store.TaskInput](),
+	mcp.AddTool(srv, &mcp.Tool{Name: "create_task", InputSchema: agentSchema[store.TaskInput](),
 		Description: "Create a task. Search first (list_tasks q=…) to avoid duplicates. Column and labels accept names in any case; assignee accepts me. " +
 			"Write the description in markdown: goal, approach, acceptance criteria; add a checklist for multi-step work."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in store.TaskInput) (*mcp.CallToolResult, any, error) {
@@ -625,7 +635,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			return text(taskStatus("Created", t, b)), nil, nil
 		})
 
-	mcp.AddTool(srv, &mcp.Tool{Name: "create_tasks", InputSchema: noDue[CreateMany](),
+	mcp.AddTool(srv, &mcp.Tool{Name: "create_tasks", InputSchema: agentSchema[CreateMany](),
 		Description: "Create several tasks at once, e.g. when breaking a feature into steps. Each item takes the same fields as create_task. " +
 			"Valid items are created even if others fail; errors are reported per item."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in CreateMany) (*mcp.CallToolResult, any, error) {
@@ -655,7 +665,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			return text(st), nil, nil
 		})
 
-	mcp.AddTool(srv, &mcp.Tool{Name: "update_task", InputSchema: noDue[store.TaskPatch](),
+	mcp.AddTool(srv, &mcp.Tool{Name: "update_task", InputSchema: agentSchema[store.TaskPatch](),
 		Description: "Change task fields. Only the fields you pass change; labels and checklist replace the whole list (use update_progress to tick or add items). " +
 			"Use start_task / finish_task / move_task to change column."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in store.TaskPatch) (*mcp.CallToolResult, any, error) {

@@ -7,8 +7,10 @@
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="vendor/marked.umd.js"></script>
-<script src="vendor/purify.min.js"></script>
+<!-- Libraries from jsDelivr, pinned with SRI: the browser refuses a file whose hash doesn't match. -->
+<script src="https://cdn.jsdelivr.net/npm/marked@18.2.0/lib/marked.umd.js" integrity="sha384-DDYDxilZ1LlqPSbaRHlrwh12h+3fUewuQj7HjscrZIWt5bGyQ+n0DHtIoZE3i3zU" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.17/dist/purify.min.js" integrity="sha384-P0JNneQf81HOl9VwNXK76cQ9VMD6Nfsnepxb0cCOg8+UzEdzgPHAPV4wVQrvYQSx" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3.5.45/dist/vue.global.prod.js" integrity="sha384-K2FjvpG1y48yCE+7CBPhnKc16ShPmT3dlNwvoA3dhjV18+L5ugI0P8PWPvdjm/Fa" crossorigin="anonymous"></script>
 <style>
 :root {
   --bg: #f5f3ef; --panel: #fcfbf8; --col: #edeae4; --card: #fefdfa; --hover: #f1eee8;
@@ -257,6 +259,13 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .md li:has(> input[type=checkbox]) { list-style: none; margin-left: -1.3em; }
 .md input[type=checkbox] { accent-color: var(--accent); margin-right: 6px; }
 .md code { font-size: .86em; padding: 1px 5px; }
+.md :not(pre) > code { background: var(--col); border: 1px solid var(--border); border-radius: 5px; padding: .5px 5px; white-space: break-spaces; }
+/* comments: narrower column, so tighter type than descriptions */
+.comment .md { font-size: 14px; line-height: 1.55; }
+.comment .md p, .comment .md ul, .comment .md ol, .comment .md pre { margin-bottom: .6em; }
+.comment .md ul, .comment .md ol { padding-left: 1.25em; }
+.comment .md li { margin: .1em 0; }
+.comment .md li::marker { color: var(--muted); }
 .md pre { background: var(--col); padding: 12px 14px; border-radius: 8px; overflow-x: auto; border: 1px solid var(--border); }
 .md pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; tab-size: 4; }
 /* highlight.js tokens */
@@ -377,29 +386,53 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
   <button id="rProjects" title="Projects (p)" aria-label="Projects"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></button>
   <button id="rBoard" class="on" title="Board" aria-label="Board" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/></svg></button>
   <div class="fill"></div>
-  <span id="rMe"></span>
   <button id="settingsBtn" title="Settings (,)" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
 </nav>
-<aside class="projects" id="projects" aria-label="Projects">
-  <h3>Projects <button class="icon-btn" id="pClose" aria-label="Close">✕</button></h3>
-  <div class="plist" id="plist"></div>
+<aside class="projects" id="projects" aria-label="Projects"><div id="projApp" style="display:contents"></div></aside>
+<script type="text/x-template" id="tpl-projects">
+  <h3>Projects <button class="icon-btn" aria-label="Close" @click="toggleProjects(false)">✕</button></h3>
+  <div class="plist">
+    <div v-for="p in S.projects" :key="p.id" class="pitem" :class="{ on: p.id === S.proj }" :title="p.dir || p.id" @click="renaming === p.id || switchProject(p.id)">
+      <span class="pi" :style="{ background: projColor(p.id) }">{{ p.name.slice(0, 1).toUpperCase() }}</span>
+      <span class="pn"><input v-if="renaming === p.id" ref="renameEl" v-model="newName" maxlength="64" aria-label="Project name"
+          @click.stop @keydown.enter.stop="saveRename(p)" @keydown.esc.stop="renaming = null" @blur="saveRename(p)"><b v-else>{{ p.name }}</b>
+        <small>{{ p.dir || p.id }}</small></span>
+      <button class="pact" title="Rename project" :aria-label="'Rename ' + p.name" @click.stop="startRename(p)">✎</button>
+      <button class="pact del" title="Delete project" :aria-label="'Delete ' + p.name" @click.stop="deleteProject(p.id)">🗑</button>
+      <span class="count" title="open / total tasks">{{ p.open }}/{{ p.total }}</span></div>
+    <p v-if="!S.projects.length" class="ph" style="padding:10px">No projects.</p>
+  </div>
   <div class="padd">
-    <input class="inp" id="pName" placeholder="New project name">
-    <input class="inp" id="pDir" placeholder="Folder (optional), e.g. ~/code/app">
-    <button class="btn" id="pAdd">+ Add project</button>
-    <span class="hint" style="margin:0">Or run <code>local-kanban</code> inside a repo.</span>
+    <input class="inp" ref="nameEl" v-model="name" placeholder="New project name" @keydown.enter="add">
+    <input class="inp" v-model="dir" placeholder="Folder (optional), e.g. ~/code/app" @keydown.enter="add">
+    <button class="btn" @click="add">+ Add project</button>
+    <span class="hint" style="margin:0">Or run <code>agent-kanban</code> inside a repo.</span>
   </div>
-</aside>
-<div class="palette" id="palette" role="dialog" aria-label="Search every project">
+</script>
+<div class="palette" id="palette" role="dialog" aria-label="Search every project"><div id="palApp" style="display:contents"></div></div>
+<script type="text/x-template" id="tpl-palette">
   <div class="pal">
-    <div class="palbar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="palIn" placeholder="Search every project…  try is:open @claude label:bug" autocomplete="off" spellcheck="false"><span class="kbd">esc</span></div>
-    <div class="presults" id="palRes"></div>
+    <div class="palbar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input ref="inEl" v-model="q" placeholder="Search every project…  try is:open @claude label:bug" autocomplete="off" spellcheck="false" @input="soon" @keydown="onKey"><span class="kbd">esc</span></div>
+    <div class="presults" ref="resEl">
+      <template v-for="(it, i) in items" :key="i">
+        <div v-if="group(i)" class="pgroup">{{ group(i) }}</div>
+        <div class="pres" :class="{ on: i === sel }" @mousemove="sel = i" @click="choose(i)">
+          <template v-if="it.project"><span class="pid">project</span><span class="pt" v-html="hl(it.project.name, words)"></span><span class="pm">{{ it.project.open }} open · {{ it.project.total }} total</span></template>
+          <template v-else>
+            <span class="pid" v-html="hl(it.hit.id, words)"></span>
+            <span class="pt">{{ it.hit.human ? '👤 ' : '' }}<span v-html="hl(it.hit.title, words)"></span></span>
+            <span class="pm"><span class="tag" :style="{ '--lc': projColor(it.hit.project) }">{{ it.hit.projectName }}</span><span>{{ it.hit.columnName }}</span>
+              <span class="prio"><i :style="{ background: PRIO_COLOR[it.hit.priority] }"></i></span><span v-if="it.hit.assignee" style="display:contents" v-html="av(it.hit.assignee)"></span></span>
+            <span v-if="it.hit.snippet" class="ps"><i>{{ it.hit.where }}:</i> <span v-html="hl(it.hit.snippet, words)"></span></span>
+          </template>
+        </div>
+      </template>
+      <div v-if="!items.length" class="pempty">No matches{{ q.trim() ? ` for “${q.trim()}”` : '' }}. Try fewer words or a filter like <code>is:open</code>.</div>
+    </div>
     <div class="pfoot"><span><span class="kbd">↑↓</span> move · <span class="kbd">↵</span> open · filters:</span>
-      <button data-ins="is:open">is:open</button><button data-ins="is:done">is:done</button><button data-ins="is:human">is:human</button>
-      <button data-ins="is:agent">is:agent</button><button data-ins="is:overdue">is:overdue</button><button data-ins="@">@who</button>
-      <button data-ins="label:">label:</button><button data-ins="col:">col:</button><button data-ins="prio:">prio:</button><button data-ins="project:">project:</button></div>
+      <button v-for="f in FILTERS" :key="f" @click="insert(f)">{{ f === '@' ? '@who' : f }}</button></div>
   </div>
-</div>
+</script>
 <div class="app">
 <header>
   <div class="brand"><img class="logo" src="logo.svg" alt=""><span id="boardName">Local Kanban</span></div>
@@ -418,70 +451,242 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 
 <main>
   <section class="board" id="board"></section>
-  <aside class="side">
-    <div class="tabs">
-      <button class="on" data-pane="activity">Activity</button>
-      <button data-pane="mcp">MCP</button>
+<!-- Board (Vue): columns, cards, drag and drop, quick add. -->
+<script type="text/x-template" id="tpl-board">
+  <div class="column" v-for="c in S.B.columns" :key="c.id">
+    <div class="col-head"><span class="swatch" :style="{ background: c.color }"></span>{{ c.name }}
+      <span class="count">{{ total(c.id) }}</span>
+      <span v-if="c.wip" class="wip" :class="{ over: total(c.id) > c.wip }">WIP {{ total(c.id) }}/{{ c.wip }}</span></div>
+    <div class="cards" :data-col="c.id" :class="{ over: overCol === c.id }" @dragover="onOver($event, c.id)" @drop="onDrop($event, c.id)">
+      <article v-for="t in lists[c.id]" :key="t.id" class="card" :data-id="t.id" tabindex="0" draggable="true"
+        :class="{ sel: t.id === S.openId, dragging: t.id === dragId, flash: t.id === S.flashId }"
+        @dragstart="dragId = t.id" @dragend="dragId = overCol = null">
+        <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="P[t.assignee]?.agent" title="Agent-managed">⚡ agent</span></div>
+        <div class="title">{{ t.title }}</div>
+        <div class="meta">
+          <span class="prio"><i :style="{ background: PRIO_COLOR[t.priority] }"></i>{{ t.priority }}</span>
+          <span v-for="l in t.labels" :key="l" class="tag" :style="L[l] ? { '--lc': L[l] } : null">{{ l }}</span>
+          <span v-if="t.due" :style="overdue(t) ? 'color:var(--p-urgent)' : ''">📅 {{ t.due.slice(5) }}</span>
+          <span v-if="t.checklist.length">☑ {{ done(t) }}/{{ t.checklist.length }}</span>
+          <span v-if="t.comments.length">💬 {{ t.comments.length }}</span>
+          <span v-if="t.link" title="Has a link">🔗</span>
+          <span v-if="t.assignee" style="display:contents" v-html="av(t.assignee)"></span>
+        </div>
+        <div v-if="t.checklist.length" class="progress"><span :style="{ width: done(t) / t.checklist.length * 100 + '%' }"></span></div>
+      </article>
+      <div v-if="!lists[c.id].length" class="empty">Drop tasks here</div>
     </div>
-    <div class="pane on" id="activity">
-      <div class="seg feedmode" id="feedMode" role="tablist" aria-label="Activity view">
-        <button data-fm="time" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Timeline</button>
-        <button data-fm="task" role="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v16M5 8h6M5 16h6"/><rect x="13" y="5" width="7" height="6" rx="1.5"/><rect x="13" y="13" width="7" height="6" rx="1.5"/></svg>By task</button></div>
-      <ul class="feed" id="feed"></ul></div>
-    <div class="pane mcp" id="mcp">
-      <h4>Connected agents</h4>
-      <div id="agents"></div>
-      <h4 style="margin-top:16px">Exposed tools</h4>
-      <div class="tool" title="Call first: valid columns, labels, members, priorities, permissions">get_board() <span style="color:var(--muted)">→ domain lists</span></div>
-      <div class="tool" title="Labels with color and task count">list_labels()</div>
-      <div class="tool">list_tasks(column?, assignee?, label?, q?)</div>
-      <div class="tool">get_task(id)</div>
-      <div class="tool">create_task(title, column?, priority?, labels?, …)</div>
-      <div class="tool">update_task(id, fields…)</div>
-      <div class="tool">check_item(id, index, done)</div>
-      <div class="tool">move_task(id, column, before?)</div>
-      <div class="tool">add_comment(id, text)</div>
-      <div class="tool">delete_task(id)</div>
+    <div class="quick" :data-col="c.id">
+      <input v-if="quickCol === c.id" :ref="el => quickEl = el" v-model="quickText" placeholder="Task title, Enter to add · Esc to cancel"
+        @keydown.enter="addQuick(c.id)" @keydown.esc.stop="quickCol = null" @blur="quickText.trim() || (quickCol = null)">
+      <button v-else @click="openQuick(c.id)">+ Add task</button>
     </div>
-  </aside>
+  </div>
+</script>
+  <aside class="side"><div id="sideApp" style="display:contents"></div></aside>
+<script type="text/x-template" id="tpl-side">
+  <div class="tabs"><button :class="{ on: tab === 'activity' }" @click="tab = 'activity'">Activity</button><button :class="{ on: tab === 'mcp' }" @click="tab = 'mcp'">MCP</button></div>
+  <div class="pane" :class="{ on: tab === 'activity' }">
+    <div class="seg feedmode" role="tablist" aria-label="Activity view">
+      <button :class="{ on: mode === 'time' }" role="tab" @click="setMode('time')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Timeline</button>
+      <button :class="{ on: mode === 'task' }" role="tab" @click="setMode('task')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v16M5 8h6M5 16h6"/><rect x="13" y="5" width="7" height="6" rx="1.5"/><rect x="13" y="13" width="7" height="6" rx="1.5"/></svg>By task</button></div>
+    <ul class="feed">
+      <template v-if="mode === 'time'">
+        <li v-for="(e, i) in S.B.events" :key="i" :class="{ link: openable(e.taskId) }" :data-open="openable(e.taskId) ? e.taskId : null">
+          <span style="display:contents" v-html="av(e.who)"></span><div><b>{{ e.who }}</b> {{ e.action }} <code v-if="e.taskId">{{ e.taskId }}</code> {{ e.detail }}<small>{{ since(e.t) }} · via {{ e.via }}</small></div></li>
+      </template>
+      <template v-else>
+        <li v-for="g in groups" :key="g.key" class="tgroup" :class="{ closed: collapsed.has(g.key) }">
+          <div class="tg-head"><button class="caret" aria-label="Collapse" @click.stop="toggle(g.key)">▾</button>
+            <code v-if="g.id">{{ g.id }}</code><span class="tt" :data-open="g.task ? g.id : null" :title="g.title">{{ g.title }}</span>
+            <small>{{ g.count }} · {{ since(g.t) }}</small></div>
+          <div class="tg-kids"><div v-for="(r, i) in g.rows" :key="i" class="row"><span style="display:contents" v-html="av(r.who)"></span>
+            <div><b>{{ r.who }}</b> {{ r.action }} {{ r.detail }}<span v-if="r.n > 1" class="x">×{{ r.n }}</span><small>{{ since(r.t) }} · via {{ r.via }}</small></div></div></div></li>
+      </template>
+      <li v-if="!S.B.events.length" class="ph">No activity yet.</li>
+    </ul></div>
+  <div class="pane mcp" :class="{ on: tab === 'mcp' }">
+    <h4>Connected agents</h4>
+    <div v-for="m in live" :key="m.name" class="agent"><span style="display:contents" v-html="av(m.name)"></span><span>{{ m.name }}</span>
+      <span class="st on" :title="'Last call ' + since(S.B.seen[m.name])" role="img" aria-label="connected"></span></div>
+    <p v-if="!live.length" class="ph">No agent connected in the last 5 minutes. Setup: Settings → MCP &amp; skill.</p>
+    <h4 style="margin-top:16px">Exposed tools</h4>
+    <div v-for="[name, help] in TOOLS" :key="name" class="tool" :title="help">{{ name }}</div>
+  </div>
+</script>
 </main>
 </div>
 
 <div class="scrim" id="scrim"></div>
-<aside class="drawer" id="drawer" aria-label="Task details">
+<aside class="drawer" id="drawer" aria-label="Task details"><div id="dApp" style="display:contents"></div></aside>
+<!-- Task drawer (Vue). Typed text lives in drafts while focused, so live updates never overwrite it. -->
+<script type="text/x-template" id="tpl-drawer">
   <div class="d-top">
-    <span id="dId"></span><span class="live" id="dLive">● updated by agent</span>
+    <span>{{ t?.id }}</span><span class="live" :class="{ show: S.live }">● updated by agent</span>
     <span class="spacer"></span>
-    <button class="icon-btn" id="dCopy" title="Copy link to this task" aria-label="Copy link">🔗</button>
-    <button class="icon-btn" id="dWide" title="Expand / collapse" aria-label="Expand">⤢</button>
-    <button class="icon-btn" id="dClose" title="Close (Esc)" aria-label="Close">✕</button>
+    <button class="icon-btn" title="Copy link to this task" aria-label="Copy link" @click="copyLink">{{ copied ? '✓' : '🔗' }}</button>
+    <button class="icon-btn" title="Expand / collapse" aria-label="Expand" @click="toggleWide">⤢</button>
+    <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="closeTask">✕</button>
   </div>
-  <div class="d-body" id="dBody"></div>
-  <div class="d-foot"><span id="dSaved">Saves automatically · <span class="kbd">⌘↵</span> save &amp; close · <span class="kbd">Esc</span> cancel field</span><button class="icon-btn danger" id="dDel">Delete task</button></div>
-</aside>
+  <div class="d-body" v-if="t" @keydown="onKey">
+    <div class="d-main">
+      <textarea class="d-title" rows="1" ref="titleEl" :value="title.draft ?? t.title"
+        @focus="title.start(t.title)" @input="onTitle" @blur="endTitle"
+        @keydown.enter.exact.prevent="$event.target.blur()" @keydown.esc.stop="cancelTitle"
+        @keydown.tab.exact.prevent="endTitle(); editDesc()"></textarea>
+      <div class="d-sub">in <b>{{ colName(t.column) }}</b> · updated {{ ago(t.updated) }}</div>
 
-<aside class="drawer" id="settings" aria-label="Settings">
-  <div class="d-top"><b style="font: 600 15px Inter, sans-serif; color: var(--text)">Settings</b><span class="spacer"></span>
-    <button class="icon-btn" id="sClose" title="Close (Esc)" aria-label="Close">✕</button></div>
-  <div class="s-body">
-    <nav class="s-nav" id="sNav">
-      <button class="on" data-go="s-general">General</button>
-      <button data-go="s-columns">Columns</button>
-      <button data-go="s-appearance">Appearance</button>
-      <button data-go="s-labels">Labels</button>
-      <button data-go="s-members">Members &amp; agents</button>
-      <button data-go="s-mcp">MCP &amp; skill</button>
-      <button data-go="s-data">Data</button>
-    </nav>
-    <div class="s-main" id="sMain"></div>
+      <div class="d-sec"><h4>Description <button v-if="!editingDesc" class="icon-btn" @click="editDesc">✎ Edit</button></h4>
+        <template v-if="editingDesc">
+          <textarea class="d-desc" ref="descEl" :value="desc.draft ?? t.description" placeholder="Write in markdown… (```mermaid blocks render as diagrams)"
+            @input="onDesc" @blur="finishDesc" @keydown.esc.stop="$event.target.blur()"></textarea>
+          <div class="hint">Markdown + mermaid · <b>Ctrl+Enter</b> or <b>Esc</b> to finish · saves as you type</div>
+        </template>
+        <div v-else class="md desc-view" title="Click to edit" @click="onDescClick"
+          v-md="t.description || ''" data-ph="Add a description… (markdown + mermaid supported)"></div>
+      </div>
+
+      <div class="d-sec"><h4>Checklist <span>{{ done }}/{{ t.checklist.length }}</span><span v-if="t.checklist.length" class="bar"><span :style="{ width: done / t.checklist.length * 100 + '%' }"></span></span></h4>
+        <label v-for="(c, i) in t.checklist" :key="i + '|' + c.text" class="check" :class="{ done: c.done }">
+          <input type="checkbox" :checked="c.done" @change="toggleCheck(i, $event.target.checked)"><span>{{ c.text }}</span>
+          <button class="icon-btn" aria-label="Remove item" @click.prevent="removeCheck(i)">✕</button></label>
+        <input class="add-line" v-model="ckText" placeholder="+ Add item" @keydown.enter="addCheck" @keydown.esc.stop="ckText = ''; $event.target.blur()"></div>
+
+      <div class="d-sec"><h4>Comments · {{ t.comments.length }}</h4>
+        <div v-for="c in t.comments" :key="c.id" class="comment"><span v-html="av(c.who)"></span><div class="bubble">
+          <div class="who"><b>{{ c.who }}</b> <span v-if="P[c.who]?.agent" class="tag">agent</span><small>{{ ago(c.t) }}</small></div>
+          <div class="md" v-md="c.text"></div></div></div>
+        <p v-if="!t.comments.length" class="ph" style="margin:0 0 8px">No comments yet.</p>
+        <div class="compose"><textarea v-model="cmText" placeholder="Write a comment… (markdown supported)"
+            @keydown.enter.ctrl.prevent.stop="sendComment" @keydown.enter.meta.prevent.stop="sendComment" @keydown.esc.stop="$event.target.blur()"></textarea>
+          <div class="row"><span class="hint" style="margin:0">Ctrl+Enter to send</span><button class="btn" @click="sendComment">Comment</button></div></div></div>
+    </div>
+    <div class="d-side"><div class="props">
+      <label class="prop"><span>Status</span><select :value="t.column" @change="move($event.target.value)">
+        <option v-for="c in S.B.columns" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+      <label class="prop"><span>Priority</span><select :value="t.priority" @change="patch({ priority: $event.target.value })">
+        <option v-for="p in S.B.priorities" :key="p" :value="p">{{ p[0].toUpperCase() + p.slice(1) }}</option></select></label>
+      <label class="prop"><span>Assignee</span><select :value="t.assignee || ''" @change="patch({ assignee: $event.target.value })">
+        <option value="">Unassigned</option>
+        <option v-for="m in S.B.members.filter(m => !(t.human && m.agent))" :key="m.name" :value="m.name">{{ m.name + (m.agent ? ' (agent)' : '') }}</option></select></label>
+      <label class="prop"><span>Due date</span><input type="date" :value="t.due || ''" @change="patch({ due: $event.target.value })"></label>
+      <div class="prop"><span>Link</span><div class="linkrow"><input type="url" :value="t.link || ''" placeholder="https://… PR, issue, doc"
+          @change="patch({ link: $event.target.value.trim() })" @keydown.esc.stop="$event.target.value = t.link || ''; $event.target.blur()">
+        <a v-if="/^https?:\/\//i.test(t.link || '')" :href="t.link" target="_blank" rel="noopener noreferrer" title="Open link">↗</a></div></div>
+      <label class="prop"><span>Human</span><div class="hrow"><input type="checkbox" class="toggle" :checked="t.human" @change="setHuman($event.target.checked)"><small>Agents skip it</small></div></label>
+      <div class="prop"><span>Labels</span><div class="chips">
+        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="L[l] ? { '--lc': L[l] } : null">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: t.labels.filter((_, j) => j !== i) })">×</button></span>
+        <input v-model="labelText" list="labelOpts" placeholder="+ label" @keydown.enter.prevent="addLabel" @keydown.esc.stop="labelText.trim() ? addLabel() : $event.target.blur()">
+        <datalist id="labelOpts"><option v-for="l in freeLabels" :key="l" :value="l"></option></datalist></div></div>
+    </div></div>
   </div>
-</aside>
+  <div class="d-foot"><span>{{ S.saved || '' }}<template v-if="!S.saved">Saves automatically · <span class="kbd">⌘↵</span> save &amp; close · <span class="kbd">Esc</span> cancel field</template></span>
+    <button class="icon-btn danger" @click="deleteTask">Delete task</button></div>
+</script>
+
+<aside class="drawer" id="settings" aria-label="Settings"><div id="setApp" style="display:contents"></div></aside>
+<!-- Settings (Vue). Edits go to a local copy that only refreshes while you're not typing and nothing is pending. -->
+<script type="text/x-template" id="tpl-settings">
+  <div class="d-top"><b style="font: 600 15px Inter, sans-serif; color: var(--text)">Settings</b><span class="spacer"></span>
+    <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="closeSettings">✕</button></div>
+  <div class="s-body" v-if="f.settings">
+    <nav class="s-nav"><button v-for="[id, name] in NAV" :key="id" :data-go="id" :class="{ on: navOn === id }" @click="go(id)">{{ name }}</button></nav>
+    <div class="s-main" ref="mainEl">
+      <section class="s-sec" id="s-general"><h3>General</h3><p>Board-wide preferences, saved in <code>{{ S.B.db }}</code>.</p>
+        <label class="field"><span>Board name</span><input class="inp" v-model="f.settings.board" @input="setHeader(); saveSettings()"></label>
+        <label class="field"><span>Ticket prefix<small>New tickets look like <b>{{ nextId }}</b></small></span>
+          <input class="inp" v-model="f.settings.prefix" maxlength="6" style="max-width:120px;text-transform:uppercase" @input="saveSettings"></label>
+        <label class="field"><span>Default column<small>Where “+ New task” lands</small></span>
+          <select class="inp" v-model="f.settings.defaultCol" @change="saveSettings"><option v-for="c in f.columns" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
+        <label class="field"><span>Default assignee<small>For tasks created in the UI</small></span>
+          <select class="inp" v-model="f.settings.defaultAssignee" @change="saveSettings"><option value="">Unassigned</option><option v-for="m in f.members" :key="m.name" :value="m.name">{{ m.name }}</option></select></label>
+        <label class="field"><span>Auto-archive<small>Hide tasks sitting in <b>{{ f.columns.at(-1)?.name }}</b> this long. They stay in the DB and show up in search.</small></span>
+          <select class="inp" v-model.number="f.settings.archiveDays" @change="saveSettings"><option v-for="[v, l] in ARCHIVE" :key="v" :value="v">{{ l }}</option></select></label>
+      </section>
+
+      <section class="s-sec" id="s-columns"><h3>Columns</h3><p>Rename, recolor, set WIP limits (empty = no limit), reorder. Columns with tasks can't be deleted.</p>
+        <div class="list"><div v-for="(c, i) in f.columns" :key="c.id" class="row-i">
+          <input type="color" v-model="c.color" aria-label="Column color" @input="saveCols">
+          <input class="inp grow" v-model="c.name" aria-label="Column name" @input="saveCols">
+          <input class="inp num" type="number" min="1" placeholder="WIP" :value="c.wip || ''" aria-label="WIP limit" @input="c.wip = Math.max(0, +$event.target.value || 0); saveCols()">
+          <span class="muted">{{ count(c.id) }} task{{ count(c.id) === 1 ? '' : 's' }}</span>
+          <button class="icon-btn" :disabled="i === 0" aria-label="Move up" @click="moveCol(i, -1)">↑</button>
+          <button class="icon-btn" :disabled="i === f.columns.length - 1" aria-label="Move down" @click="moveCol(i, 1)">↓</button>
+          <button class="icon-btn danger" :disabled="count(c.id) > 0 || f.columns.length === 1" :title="count(c.id) ? 'Move its tasks out first' : null" aria-label="Delete column" @click="delCol(i)">✕</button>
+        </div></div>
+        <button class="btn ghost" style="margin-top:10px" @click="addCol">+ Add column</button>
+      </section>
+
+      <section class="s-sec" id="s-appearance"><h3>Appearance</h3><p>Stored per browser.</p>
+        <div class="field"><span>Theme</span><div class="seg">
+          <button v-for="[v, l] in THEMES" :key="v" :data-theme-set="v" :class="{ on: theme === v }" @click="setTheme(v); theme = v">{{ l }}</button></div></div>
+        <div class="field"><span>Accent color</span><div class="swatches">
+          <button data-accent="" :class="{ on: !accent }" style="background:var(--accent-def)" title="Theme default" aria-label="Theme default accent" @click="setAccent(null); accent = null"></button>
+          <button v-for="[n, c] in ACCENTS" :key="c" :data-accent="c" :class="{ on: accent === c }" :style="{ background: c }" :title="n" :aria-label="n + ' accent'" @click="setAccent(c); accent = c"></button></div></div>
+      </section>
+
+      <section class="s-sec" id="s-labels"><h3>Labels</h3><p>Agents can only use these. Rename or recolor everywhere at once; deleting removes the label from every task.</p>
+        <div class="list"><div v-for="(l, i) in f.labels" :key="l.name" class="row-i">
+          <input type="color" v-model="l.color" aria-label="Label color" @input="saveLabels">
+          <input class="inp grow" :value="l.name" aria-label="Label name" @change="renameLabel(l.name, $event.target.value)">
+          <span class="tag" :style="{ '--lc': l.color }">{{ l.name }}</span><span class="muted">{{ l.tasks }} task{{ l.tasks === 1 ? '' : 's' }}</span>
+          <button class="icon-btn danger" aria-label="Delete label" @click="delLabel(i)">✕</button></div>
+          <div v-if="!f.labels.length" class="row-i muted">No labels yet.</div></div>
+        <input class="inp" v-model="newLabel" placeholder="+ New label (Enter)" style="margin-top:10px" @keydown.enter="addLabel">
+      </section>
+
+      <section class="s-sec" id="s-members"><h3>Members &amp; agents</h3><p>Shared by every project. Agents identify themselves with <code>?agent=name</code> on the MCP URL; unknown names join automatically as agents.</p>
+        <div class="list"><div v-for="(m, i) in f.members" :key="m.name" class="row-i"><span style="display:contents" v-html="av(m.name)"></span>
+          <b class="grow">{{ m.name }}</b><span v-if="m.name === ME()" class="muted">you</span>
+          <input type="color" v-model="m.color" aria-label="Color" @input="saveMembers">
+          <select class="inp" style="width:110px;flex:none" :value="iconOf(m.name, m)" aria-label="Icon" @change="m.icon = $event.target.value; saveMembers()">
+            <option v-for="k in Object.keys(GLYPH)" :key="k">{{ k }}</option></select>
+          <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" v-model="m.agent" style="accent-color:var(--accent)" @change="saveMembers">agent</label>
+          <button class="icon-btn danger" :disabled="m.name === ME()" aria-label="Remove" @click="delMember(i)">✕</button>
+        </div></div>
+        <input class="inp" v-model="newMember" placeholder="+ Add member or agent (Enter)" style="margin-top:10px" @keydown.enter="addMember">
+      </section>
+
+      <section class="s-sec" id="s-mcp"><h3>MCP &amp; skill</h3><p>This server is the only process that opens the database; agents connect to it over HTTP while it runs.</p>
+        <div v-for="([label, code], i) in snippets" :key="label" class="snippet"><div>{{ label }}</div><pre>{{ code }}</pre>
+          <button class="icon-btn" @click="copy(code, i)">{{ copied === i ? 'Copied' : 'Copy' }}</button></div>
+        <h4 style="margin:22px 0 4px">Agent permissions</h4>
+        <p class="hint" style="margin:0 0 10px">What MCP tools may do. Blocked calls return an error to the agent and show in Activity.</p>
+        <div class="list"><label v-for="(l, k) in PERMS" :key="k" class="row-i" style="cursor:pointer">
+          <span class="grow">{{ l }}</span><input type="checkbox" class="toggle" v-model="f.settings.perms[k]" @change="saveSettings"></label></div>
+      </section>
+
+      <section class="s-sec" id="s-data"><h3>Data</h3><p>Everything lives in one Turso (SQLite-compatible) file. Back it up like any other file while the server is stopped.</p>
+        <div class="field"><span>Database</span><span><code>{{ S.B.db }}</code> · {{ S.B.tasks.length }} tasks · {{ S.B.tasks.reduce((n, t) => n + t.comments.length, 0) }} comments</span></div>
+        <div class="field"><span>Cloud sync<small>Set in <code>~/.config/kanban/.env</code> or env vars</small></span>
+          <span v-if="S.B.sync">Remote <code>{{ S.B.sync.remote }}</code> ·
+            <span v-if="S.B.sync.error" class="danger">failing: {{ S.B.sync.error }}</span><template v-else>{{ S.B.sync.lastPull ? 'synced ' + ago(S.B.sync.lastPull) : 'starting…' }}</template></span>
+          <span v-else>Off (local only). Set <code>AGENT_KANBAN_TURSO_URL</code> (and a token for Turso Cloud) to enable.</span></div>
+        <div class="field"><span>Backup</span><span style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn ghost" :href="'api/p/' + encodeURIComponent(S.proj) + '/export'" download style="text-decoration:none">Export JSON</a>
+          <label class="btn ghost">Import JSON<input type="file" accept="application/json" hidden @change="importFile"></label></span></div>
+        <div class="danger-zone"><div><b>Delete all tasks</b><small>Columns, members, labels and settings are kept. Cannot be undone.</small></div>
+          <button class="btn red" @click="deleteAll">Delete tasks</button></div>
+        <div class="danger-zone"><div><b>Delete project “{{ f.settings.board }}”</b><small>Removes the project with all its tasks, comments and history. Members stay. Cannot be undone.</small></div>
+          <button class="btn red" :disabled="S.projects.length < 2" :title="S.projects.length < 2 ? 'Can\'t delete the last project' : null" @click="deleteProject(S.proj)">Delete project</button></div>
+      </section>
+    </div>
+  </div>
+</script>
 <div class="toast" id="toast" role="alert"></div>
 
 <script>
+// The UI libraries come from jsDelivr: say so instead of showing a dead page when they can't load (offline, blocked).
+if (!window.Vue || !window.marked || !window.DOMPurify) {
+  document.body.innerHTML = '<p style="padding:24px;font:15px sans-serif">Couldn’t load the UI libraries from cdn.jsdelivr.net. The board needs internet access in this browser: check the connection and reload.</p>';
+  throw new Error('UI libraries failed to load');
+}
 // ---------- State (from GET /api/board, refreshed on every SSE event) ----------
 let B = { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' };
 const P = {}, L = {};               // member name → member (+short), label → color
+// Reactive state read by the Vue parts of the UI (drawer). The rest of the page still renders by hand.
+const S = Vue.reactive({ B, openId: null, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
+  projects: [], proj: null, pal: { q: '', n: 0 }, settingsN: 0 });
 const PRIO = { urgent: 0, high: 1, medium: 2, low: 3 };
 const PRIO_COLOR = { urgent: 'var(--p-urgent)', high: 'var(--p-high)', medium: 'var(--p-med)', low: 'var(--p-low)' };
 // One family (Tailwind 500s): equal weight, readable as text on dark and as button fill with white text.
@@ -534,7 +739,7 @@ async function api(op, body) {
   const r = await fetch('/api/p/' + encodeURIComponent(PROJ) + '/' + op, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { toast(j.error || r.statusText); throw new Error(j.error || r.statusText); }
-  $('#dSaved').textContent = 'Saved · ' + new Date().toLocaleTimeString();
+  S.saved = 'Saved · ' + new Date().toLocaleTimeString();
   return j;
 }
 
@@ -545,11 +750,12 @@ async function load() {
   const b = await r.json();
   if (my < applied) return; // a newer response already landed
   if (!r.ok) { toast(b.error || 'Project not found'); const other = PROJECTS.find(p => p.id !== PROJ); return other && switchProject(other.id); }
-  applied = my; B = b;
+  applied = my; B = Vue.reactive(b); // reactive: edits anywhere (e.g. settings) redraw the Vue parts
   for (const k in P) delete P[k];
   for (const k in L) delete L[k];
   B.members.forEach(m => P[m.name] = { ...m, short: m.name.slice(0, 2).toUpperCase() });
   B.labels.forEach(l => L[l.name] = l.color);
+  S.B = B;
   renderAll();
 }
 
@@ -557,14 +763,13 @@ async function load() {
 const projColor = id => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 50% 50%)`; };
 async function loadProjects() {
   const r = await (await fetch('/api/projects')).json();
-  PROJECTS = r.projects || [];
-  renderProjects();
+  PROJECTS = S.projects = r.projects || [];
 }
 let lpT; const loadProjectsSoon = () => { clearTimeout(lpT); lpT = setTimeout(loadProjects, 400); };
 async function boot() {
   await loadProjects();
   const [hp] = decodeURIComponent(location.hash.slice(1)).split('/');
-  PROJ = [hp, PROJ, store.get('kanban:project')].find(id => id && PROJECTS.some(p => p.id === id)) || PROJECTS[0]?.id;
+  PROJ = S.proj = [hp, PROJ, store.get('kanban:project')].find(id => id && PROJECTS.some(p => p.id === id)) || PROJECTS[0]?.id;
   if (!PROJ) return toast('No projects yet: add one from the folder icon');
   store.set('kanban:project', PROJ);
   await load();
@@ -573,19 +778,10 @@ async function boot() {
 async function switchProject(pid, fromRoute) {
   if (!pid || !PROJECTS.some(p => p.id === pid)) return;
   if (openId) closeTask();
-  PROJ = pid; store.set('kanban:project', pid);
-  $('#q').value = '';
-  await load(); renderProjects();
+  PROJ = S.proj = pid; store.set('kanban:project', pid);
+  $('#q').value = S.q = '';
+  await load();
   if (!fromRoute && decodeURIComponent(location.hash.slice(1)) !== pid) history.pushState(null, '', '#' + encodeURIComponent(pid));
-}
-function renderProjects() {
-  if ($('#plist').contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; // mid-rename
-  $('#plist').innerHTML = PROJECTS.map(p => `<div class="pitem ${p.id === PROJ ? 'on' : ''}" data-pid="${esc(p.id)}" title="${esc(p.dir || p.id)}">
-    <span class="pi" style="background:${projColor(p.id)}">${esc(p.name.slice(0, 1).toUpperCase())}</span>
-    <span class="pn"><b>${esc(p.name)}</b><small>${esc(p.dir || p.id)}</small></span>
-    <button class="pact" data-act="rename" title="Rename project" aria-label="Rename ${esc(p.name)}">✎</button>
-    <button class="pact del" data-act="delete" title="Delete project" aria-label="Delete ${esc(p.name)}">🗑</button>
-    <span class="count" title="open / total tasks">${p.open}/${p.total}</span></div>`).join('') || '<p class="ph" style="padding:10px">No projects.</p>';
 }
 const projPanel = $('#projects');
 function toggleProjects(on = !projPanel.classList.contains('open')) {
@@ -595,16 +791,8 @@ function toggleProjects(on = !projPanel.classList.contains('open')) {
 toggleProjects(store.get('kanban:projects') === '1');
 $('#rProjects').onclick = () => toggleProjects();
 $('#rBoard').onclick = () => { closeTask(); closeSettings(); };
-$('#pClose').onclick = () => toggleProjects(false);
 $('.brand').onclick = () => toggleProjects();
-$('#plist').onclick = e => {
-  const it = e.target.closest('[data-pid]'); if (!it || e.target.closest('input')) return;
-  const act = e.target.closest('[data-act]')?.dataset.act;
-  if (act === 'rename') return renameProject(it.dataset.pid, it.querySelector('.pn b'));
-  if (act === 'delete') return deleteProject(it.dataset.pid);
-  switchProject(it.dataset.pid);
-};
-// Inline rename (sidebar row or header): Enter or blur saves, Esc cancels. The id (URLs, MCP ?project=) never changes.
+// Header rename: Enter or blur saves, Esc cancels. The id (URLs, MCP ?project=) never changes.
 function renameProject(pid, el) {
   const p = PROJECTS.find(x => x.id === pid); if (!p || !el) return;
   const inp = document.createElement('input');
@@ -635,80 +823,82 @@ async function deleteProject(pid) {
 }
 $('#boardName').onclick = e => { e.stopPropagation(); renameProject(PROJ, $('#boardName')); };
 $('#boardName').title = 'Rename project';
-async function addProject() {
-  const name = $('#pName').value.trim(), dir = $('#pDir').value.trim();
-  if (!name) return $('#pName').focus();
-  const p = await post('/api/projects/add', { name, dir }).catch(() => null); if (!p) return;
-  $('#pName').value = $('#pDir').value = '';
-  await loadProjects(); switchProject(p.id);
-}
-$('#pAdd').onclick = addProject;
-['#pName', '#pDir'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') addProject(); }));
+Vue.createApp({
+  template: '#tpl-projects',
+  setup() {
+    const renaming = Vue.ref(null), newName = Vue.ref(''), name = Vue.ref(''), dir = Vue.ref(''), renameEl = Vue.ref(null), nameEl = Vue.ref(null);
+    async function startRename(p) {
+      renaming.value = p.id; newName.value = p.name; await Vue.nextTick();
+      const el = [].concat(renameEl.value)[0]; el?.focus(); el?.select();
+    }
+    async function saveRename(p) {
+      if (renaming.value !== p.id) return; // Enter then blur: save once
+      renaming.value = null;
+      const v = newName.value.trim();
+      if (v && v !== p.name) { p.name = v; await post('/api/projects/rename', { id: p.id, name: v }).catch(() => {}); }
+      loadProjects();
+    }
+    async function add() {
+      if (!name.value.trim()) return nameEl.value?.focus();
+      const p = await post('/api/projects/add', { name: name.value.trim(), dir: dir.value.trim() }).catch(() => null); if (!p) return;
+      name.value = dir.value = '';
+      await loadProjects(); switchProject(p.id);
+    }
+    return { S, renaming, newName, name, dir, renameEl, nameEl, projColor, toggleProjects, switchProject, deleteProject, startRename, saveRename, add };
+  },
+}).mount('#projApp');
 
 // ---------- Command palette: search every project ----------
-const pal = $('#palette'), palIn = $('#palIn');
-let palSel = 0, palItems = [], palT, palSeq = 0, palWords = [];
-function openPalette(q = '') { pal.classList.add('open'); palIn.value = q; palIn.focus(); searchNow(); }
-function closePalette() { pal.classList.remove('open'); }
+const pal = $('#palette');
+const FILTERS = ['is:open', 'is:done', 'is:human', 'is:agent', 'is:overdue', '@', 'label:', 'col:', 'prio:', 'project:'];
+function openPalette(q = '') { pal.classList.add('open'); S.pal.q = q; S.pal.n++; }
+function closePalette() { pal.classList.remove('open'); if (pal.contains(document.activeElement)) document.activeElement.blur(); } // else shortcuts land in the hidden input
 const hl = (text, words) => {
   if (!words.length) return esc(text);
   const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
   return String(text ?? '').split(re).map((part, i) => i % 2 ? `<mark>${esc(part)}</mark>` : esc(part)).join('');
 };
-async function searchNow() {
-  const q = palIn.value.trim(), my = ++palSeq;
-  const hits = await fetch('/api/search?q=' + encodeURIComponent(q)).then(r => r.json()).catch(() => []);
-  if (my !== palSeq) return;
-  palWords = q.toLowerCase().split(/\s+/).filter(w => w && !w.includes(':') && !/^[@#]/.test(w));
-  const projs = palWords.length && palWords.length === q.split(/\s+/).length
-    ? PROJECTS.filter(p => palWords.every(w => (p.name + ' ' + p.id).toLowerCase().includes(w))) : [];
-  palItems = [...projs.map(p => ({ project: p })), ...(Array.isArray(hits) ? hits : []).map(h => ({ hit: h }))];
-  palSel = 0; renderPalette(q);
-}
-function renderPalette(q) {
-  let html = '', group = '';
-  palItems.forEach((it, i) => {
-    const g = it.project ? 'Projects' : q ? 'Tasks' : 'Recent';
-    if (g !== group) { html += `<div class="pgroup">${g}</div>`; group = g; }
-    if (it.project) {
-      const p = it.project;
-      html += `<div class="pres ${i === palSel ? 'on' : ''}" data-i="${i}"><span class="pid">project</span>
-        <span class="pt">${hl(p.name, palWords)}</span><span class="pm">${p.open} open · ${p.total} total</span></div>`;
-      return;
+Vue.createApp({
+  template: '#tpl-palette',
+  setup() {
+    const q = Vue.ref(''), items = Vue.ref([]), sel = Vue.ref(0), words = Vue.ref([]), inEl = Vue.ref(null), resEl = Vue.ref(null);
+    let timer, seq = 0, groupOf = [];
+    async function search() {
+      const text = q.value.trim(), my = ++seq;
+      const hits = await fetch('/api/search?q=' + encodeURIComponent(text)).then(r => r.json()).catch(() => []);
+      if (my !== seq) return;
+      words.value = text.toLowerCase().split(/\s+/).filter(w => w && !w.includes(':') && !/^[@#]/.test(w));
+      const projs = words.value.length && words.value.length === text.split(/\s+/).length
+        ? S.projects.filter(p => words.value.every(w => (p.name + ' ' + p.id).toLowerCase().includes(w))) : [];
+      items.value = [...projs.map(p => ({ project: p })), ...(Array.isArray(hits) ? hits : []).map(h => ({ hit: h }))];
+      groupOf = items.value.map(it => it.project ? 'Projects' : text ? 'Tasks' : 'Recent');
+      sel.value = 0;
     }
-    const h = it.hit;
-    html += `<div class="pres ${i === palSel ? 'on' : ''}" data-i="${i}">
-      <span class="pid">${hl(h.id, palWords)}</span>
-      <span class="pt">${h.human ? '👤 ' : ''}${hl(h.title, palWords)}</span>
-      <span class="pm"><span class="tag" style="--lc:${projColor(h.project)}">${esc(h.projectName)}</span><span>${esc(h.columnName)}</span>
-        <span class="prio"><i style="background:${PRIO_COLOR[h.priority]}"></i></span>${h.assignee ? av(h.assignee) : ''}</span>
-      ${h.snippet ? `<span class="ps"><i>${esc(h.where)}:</i> ${hl(h.snippet, palWords)}</span>` : ''}</div>`;
-  });
-  $('#palRes').innerHTML = html || `<div class="pempty">No matches${q ? ` for “${esc(q)}”` : ''}. Try fewer words or a filter like <code>is:open</code>.</div>`;
-  $('#palRes .pres.on')?.scrollIntoView({ block: 'nearest' });
-}
-async function choosePalette(i) {
-  const it = palItems[i]; if (!it) return;
-  closePalette();
-  if (it.project) return switchProject(it.project.id);
-  if (it.hit.project !== PROJ) await switchProject(it.hit.project);
-  openTask(it.hit.id);
-}
-palIn.oninput = () => { clearTimeout(palT); palT = setTimeout(searchNow, 120); };
-palIn.onkeydown = e => {
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    e.preventDefault(); if (!palItems.length) return;
-    palSel = (palSel + (e.key === 'ArrowDown' ? 1 : -1) + palItems.length) % palItems.length; renderPalette(palIn.value.trim());
-  }
-  if (e.key === 'Enter') { e.preventDefault(); clearTimeout(palT); choosePalette(palSel); }
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePalette(); }
-};
-$('#palRes').onmousemove = e => { const r = e.target.closest('.pres'); if (r && +r.dataset.i !== palSel) { palSel = +r.dataset.i; $('#palRes .pres.on')?.classList.remove('on'); r.classList.add('on'); } };
-$('#palRes').onclick = e => { const r = e.target.closest('.pres'); if (r) choosePalette(+r.dataset.i); };
+    const group = i => groupOf[i] !== groupOf[i - 1] ? groupOf[i] : '';
+    const soon = () => { clearTimeout(timer); timer = setTimeout(search, 120); };
+    Vue.watch(() => S.pal.n, async () => { q.value = S.pal.q; search(); await Vue.nextTick(); inEl.value?.focus(); });
+    Vue.watch(sel, async () => { await Vue.nextTick(); resEl.value?.querySelector('.pres.on')?.scrollIntoView({ block: 'nearest' }); });
+    async function choose(i) {
+      const it = items.value[i]; if (!it) return;
+      closePalette();
+      if (it.project) return switchProject(it.project.id);
+      if (it.hit.project !== PROJ) await switchProject(it.hit.project);
+      openTask(it.hit.id);
+    }
+    function onKey(e) {
+      const n = items.value.length;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (n) sel.value = (sel.value + (e.key === 'ArrowDown' ? 1 : -1) + n) % n; }
+      if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); choose(sel.value); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closePalette(); }
+    }
+    function insert(f) {
+      q.value = (q.value.trim() + ' ' + f).trim() + (f.endsWith(':') || f === '@' ? '' : ' ');
+      inEl.value?.focus(); search();
+    }
+    return { q, items, sel, words, inEl, resEl, FILTERS, PRIO_COLOR, hl, av, projColor, group, soon, choose, onKey, insert };
+  },
+}).mount('#palApp');
 pal.onclick = e => { if (e.target === pal) closePalette(); };
-$('.pfoot').onclick = e => { const b = e.target.closest('[data-ins]'); if (!b) return;
-  palIn.value = (palIn.value.trim() + ' ' + b.dataset.ins).trim() + (b.dataset.ins.endsWith(':') || b.dataset.ins === '@' ? '' : ' ');
-  palIn.focus(); searchNow(); };
 
 function setLive(on) {
   $('#dot').classList.toggle('off', !on);
@@ -736,27 +926,24 @@ function renderAll() {
   $('#boardName').textContent = B.settings.board;
   document.title = B.settings.board;
   $('#dbName').textContent = B.db.split(/[\\/]/).pop();
-  $('#rMe').innerHTML = av(ME());
   setLive(true);
-  if (B.sync) $('.sync').title = `${B.db} · Turso Cloud ${B.sync.remote}` + (B.sync.error ? ` · last error: ${B.sync.error}` : B.sync.lastPull ? ` · synced ${ago(B.sync.lastPull)}` : '');
-  $('.sync').title = B.db + ' · live updates';
-  fillWho(); render(); renderFeed();
+  $('.sync').title = B.db + (!B.sync ? ' · live updates' : ` · sync ${B.sync.remote}` +
+    (B.sync.error ? ` · last error: ${B.sync.error}` : B.sync.lastPull ? ` · synced ${ago(B.sync.lastPull)}` : ''));
+  fillWho();
   if (openId) {
     if (!byId(openId)) { toast(`${openId} was deleted`); closeTask(); }
-    else if (!typingIn(drawer)) renderDrawer();
   }
-  if (settingsEl.classList.contains('open') && !typingIn(settingsEl) && !Object.keys(pending).length) renderSettings();
   if (flashEv?.taskId) {
     const ev = flashEv;
-    if (ev.via === 'mcp') document.querySelector(`.card[data-id="${CSS.escape(ev.taskId)}"]`)?.classList.add('flash');
-    if (ev.via === 'mcp' && ev.taskId === openId) { $('#dLive').classList.add('show'); setTimeout(() => $('#dLive').classList.remove('show'), 2500); }
+    if (ev.via === 'mcp') { S.flashId = ev.taskId; setTimeout(() => S.flashId === ev.taskId && (S.flashId = null), 1400); }
+    if (ev.via === 'mcp' && ev.taskId === openId) { S.live = true; setTimeout(() => S.live = false, 2500); }
   }
   flashEv = null;
 }
 
 // ---------- Board ----------
 function sorted(list) {
-  const k = $('#sort').value;
+  const k = S.sort;
   return [...list].sort((a, b) =>
     k === 'priority' ? PRIO[a.priority] - PRIO[b.priority] :
     k === 'due' ? (a.due || '9').localeCompare(b.due || '9') :
@@ -766,128 +953,89 @@ function sorted(list) {
 function fillWho() {
   const sel = $('#who'), v = sel.value;
   sel.innerHTML = '<option value="">All assignees</option>' + B.members.map(m => `<option>${esc(m.name)}</option>`).join('');
-  sel.value = P[v] ? v : '';
+  sel.value = P[v] ? v : ''; S.who = sel.value;
 }
 
-function render() {
-  const q = $('#q').value.toLowerCase(), who = $('#who').value;
-  const visible = B.tasks.filter(t => (!who || t.assignee === who) && (q || !archived(t)) &&
-    (!q || (t.id + ' ' + t.title + ' ' + t.labels.join(' ')).toLowerCase().includes(q)));
-  $('#board').innerHTML = B.columns.map(c => {
-    const list = sorted(visible.filter(t => t.column === c.id));
-    const total = B.tasks.filter(t => t.column === c.id && !archived(t)).length;
-    return `<div class="column">
-      <div class="col-head"><span class="swatch" style="background:${esc(c.color)}"></span>${esc(c.name)}
-        <span class="count">${total}</span>
-        ${c.wip ? `<span class="wip ${total > c.wip ? 'over' : ''}">WIP ${total}/${c.wip}</span>` : ''}</div>
-      <div class="cards" data-col="${esc(c.id)}">${list.map(card).join('') || '<div class="empty">Drop tasks here</div>'}</div>
-      <div class="quick" data-col="${esc(c.id)}"><button>+ Add task</button></div>
-    </div>`;
-  }).join('');
-}
+// ---------- Side panel (Vue): Activity timeline or by-task tree, connected agents, tools ----------
+const TOOLS = [
+  ['get_board()', 'Call first: columns, labels, members, priorities, permissions'], ['next_task()', 'What to work on next, with the reason'],
+  ['start_task(id, note?)', 'Assign, move to in progress, post the plan'], ['update_progress(id, done?, add?, note?)', 'Tick or add checklist items, post a note'],
+  ['finish_task(id, summary, link?, done?)', 'Summary + link, move to review (or Done)'], ['my_tasks()', 'Your open tasks'],
+  ['list_tasks(column?, assignee?, label?, q?)', 'Filtered task list'], ['get_task(id)', 'Description, checklist, comments'],
+  ['list_labels()', 'Labels with task counts'], ['create_task(title, …)', 'One task'], ['create_tasks(tasks)', 'Up to 50 tasks'],
+  ['update_task(id, fields…)', 'Edit fields'], ['move_task(id, column, before?)', 'Move a task'], ['check_item(id, item, done)', 'Tick one checklist item'],
+  ['add_comment(id, text)', 'Markdown comment'], ['delete_task(id)', 'Off by default'],
+];
+Vue.createApp({
+  template: '#tpl-side',
+  setup() {
+    const tab = Vue.ref('activity'), mode = Vue.ref(store.get('kanban:feed') === 'task' ? 'task' : 'time');
+    const collapsed = Vue.reactive(new Set()), now = Vue.ref(Date.now());
+    setInterval(() => now.value = Date.now(), 30e3); // keeps "2m ago" and connected agents fresh
+    const since = t => (now.value, ago(t));
+    const setMode = m => { mode.value = m; store.set('kanban:feed', m === 'task' ? 'task' : null); };
+    const toggle = k => collapsed.has(k) ? collapsed.delete(k) : collapsed.add(k);
+    const taskIds = Vue.computed(() => new Set(S.B.tasks.map(t => t.id)));
+    const openable = id => id && taskIds.value.has(id);
+    // Connected = made an MCP call in the last 5 minutes (MCP over HTTP has no persistent connection to watch).
+    const live = Vue.computed(() => S.B.members.filter(m => m.agent && S.B.seen[m.name] && now.value - S.B.seen[m.name] < 5 * 60e3));
+    const groups = Vue.computed(() => {
+      const by = new Map(); // task id → events, newest first; insertion order = most recently active first
+      for (const e of S.B.events) { const k = e.taskId || ''; if (!by.has(k)) by.set(k, []); by.get(k).push(e); }
+      return [...by].map(([k, evs]) => {
+        const task = k && S.B.tasks.find(t => t.id === k);
+        const rows = [];
+        for (const e of evs) { // fold runs like "codex updated checklist" ×3
+          const last = rows.at(-1);
+          if (last && last.who === e.who && last.action === e.action && last.detail === e.detail) last.n++;
+          else rows.push({ ...e, n: 1 });
+        }
+        return { key: k || '__board', id: k, task, rows, count: evs.length, t: evs[0].t,
+          title: k ? (task ? task.title : (evs.find(e => e.detail && /created|deleted/.test(e.action))?.detail || 'deleted task')) : 'Board' };
+      });
+    });
+    return { S, TOOLS, tab, mode, collapsed, live, groups, since, setMode, toggle, openable, av };
+  },
+}).mount('#sideApp');
 
-function card(t) {
-  const overdue = t.due && t.column !== lastCol() && t.due < new Date().toISOString().slice(0, 10);
-  const done = t.checklist.filter(c => c.done).length;
-  return `<article class="card ${t.id === openId ? 'sel' : ''}" draggable="true" data-id="${esc(t.id)}" tabindex="0">
-    <div class="id"><span>${esc(t.id)}</span>${t.human ? '<span class="human" title="Human-only: agents skip it">👤 human</span>' : P[t.assignee]?.agent ? '<span title="Agent-managed">⚡ agent</span>' : ''}</div>
-    <div class="title">${esc(t.title)}</div>
-    <div class="meta">
-      <span class="prio"><i style="background:${PRIO_COLOR[t.priority]}"></i>${esc(t.priority)}</span>
-      ${t.labels.map(l => tag(l)).join('')}
-      ${t.due ? `<span style="${overdue ? 'color:var(--p-urgent)' : ''}">📅 ${esc(t.due.slice(5))}</span>` : ''}
-      ${t.checklist.length ? `<span>☑ ${done}/${t.checklist.length}</span>` : ''}
-      ${t.comments.length ? `<span>💬 ${t.comments.length}</span>` : ''}
-      ${t.link ? '<span title="Has a link">🔗</span>' : ''}
-      ${t.assignee ? av(t.assignee) : ''}
-    </div>
-    ${t.checklist.length ? `<div class="progress"><span style="width:${done / t.checklist.length * 100}%"></span></div>` : ''}
-  </article>`;
-}
-
-// Activity: a timeline (default) or, optionally, a tree grouped by task.
-const collapsedGroups = new Set();
-function feedTree() {
-  const groups = new Map(); // key → events, newest first; insertion order = most recently active first
-  for (const e of B.events) {
-    const k = e.taskId || '';
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(e);
-  }
-  return [...groups].map(([k, evs]) => {
-    const t = k && byId(k);
-    const title = k ? (t ? t.title : (evs.find(e => e.detail && /created|deleted/.test(e.action))?.detail || 'deleted task')) : 'Board';
-    const rows = [];
-    for (const e of evs) { // fold runs like "codex updated checklist" ×3
-      const last = rows.at(-1);
-      if (last && last.who === e.who && last.action === e.action && last.detail === e.detail) last.n++;
-      else rows.push({ ...e, n: 1 });
+// ---------- Board (Vue) ----------
+Vue.createApp({
+  template: '#tpl-board',
+  setup() {
+    const dragId = Vue.ref(null), overCol = Vue.ref(null), quickCol = Vue.ref(null), quickText = Vue.ref('');
+    const quickEl = Vue.ref(null);
+    const visible = Vue.computed(() => {
+      const q = S.q.toLowerCase(), who = S.who;
+      return S.B.tasks.filter(t => (!who || t.assignee === who) && (q || !archived(t)) &&
+        (!q || (t.id + ' ' + t.title + ' ' + t.labels.join(' ')).toLowerCase().includes(q)));
+    });
+    const lists = Vue.computed(() => Object.fromEntries(S.B.columns.map(c => [c.id, sorted(visible.value.filter(t => t.column === c.id))])));
+    const totals = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) if (!archived(t)) n[t.column] = (n[t.column] || 0) + 1; return n; });
+    const total = col => totals.value[col] || 0;
+    const done = t => t.checklist.filter(c => c.done).length;
+    const overdue = t => t.due && t.column !== lastCol() && t.due < new Date().toISOString().slice(0, 10);
+    function onOver(e, col) { if (!dragId.value) return; e.preventDefault(); overCol.value = col; }
+    async function onDrop(e, col) {
+      if (!dragId.value) return;
+      e.preventDefault();
+      const id = dragId.value; dragId.value = overCol.value = null;
+      const after = [...e.currentTarget.querySelectorAll('.card')].filter(c => c.dataset.id !== id)
+        .find(c => e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2);
+      S.sort = $('#sort').value = 'order';
+      await api('move_task', { id, column: col, before: after?.dataset.id || '' }).catch(() => {});
+      load();
     }
-    const key = k || '__board';
-    return `<li class="tgroup ${collapsedGroups.has(key) ? 'closed' : ''}">
-      <div class="tg-head"><button class="caret" data-tg="${esc(key)}" aria-label="Collapse">▾</button>
-        ${k ? `<code>${esc(k)}</code>` : ''}<span class="tt" ${t ? `data-open="${esc(k)}"` : ''} title="${esc(title)}">${esc(title)}</span>
-        <small>${evs.length} · ${ago(evs[0].t)}</small></div>
-      <div class="tg-kids">${rows.map(r => `<div class="row">${av(r.who)}<div><b>${esc(r.who)}</b> ${esc(r.action)} ${esc(r.detail)}${r.n > 1 ? `<span class="x">×${r.n}</span>` : ''}
-        <small>${ago(r.t)} · via ${esc(r.via)}</small></div></div>`).join('')}</div></li>`;
-  }).join('');
-}
-function renderFeed() {
-  const mode = store.get('kanban:feed') === 'task' ? 'task' : 'time';
-  document.querySelectorAll('#feedMode button').forEach(b => b.classList.toggle('on', b.dataset.fm === mode));
-  $('#feed').innerHTML = (mode === 'task' ? feedTree() : B.events.map(e =>
-    `<li ${e.taskId && byId(e.taskId) ? `data-open="${esc(e.taskId)}" class="link"` : ''}>${av(e.who)}<div><b>${esc(e.who)}</b> ${esc(e.action)}
-      ${e.taskId ? `<code>${esc(e.taskId)}</code>` : ''} ${esc(e.detail)}<small>${ago(e.t)} · via ${esc(e.via)}</small></div></li>`).join(''))
-    || '<li class="ph">No activity yet.</li>';
-  $('#agents').innerHTML = B.members.filter(m => m.agent).map(m => {
-    const seen = B.seen[m.name], active = seen && Date.now() - seen < 5 * 60e3;
-    return `<div class="agent">${av(m.name)}<span>${esc(m.name)}</span><span class="st ${active ? 'on' : ''}" title="${active ? 'Active' : seen ? 'Last seen ' + ago(seen) : 'Never connected'}" role="img" aria-label="${active ? 'active' : 'inactive'}"></span></div>`;
-  }).join('');
-}
-
-$('#feedMode').onclick = e => { const b = e.target.closest('[data-fm]'); if (b) { store.set('kanban:feed', b.dataset.fm === 'task' ? 'task' : null); renderFeed(); } };
-$('#feed').addEventListener('click', e => {
-  const c = e.target.closest('[data-tg]'); if (!c) return;
-  e.stopPropagation();
-  collapsedGroups.has(c.dataset.tg) ? collapsedGroups.delete(c.dataset.tg) : collapsedGroups.add(c.dataset.tg);
-  c.closest('.tgroup').classList.toggle('closed');
-});
-
-// ---------- Drag & drop ----------
-let dragId = null;
-document.addEventListener('dragstart', e => { const c = e.target.closest?.('.card'); if (!c) return; dragId = c.dataset.id; c.classList.add('dragging'); });
-document.addEventListener('dragend', () => { document.querySelectorAll('.dragging, .over').forEach(x => x.classList.remove('dragging', 'over')); });
-document.addEventListener('dragover', e => {
-  const zone = e.target.closest?.('.cards'); if (!zone || !dragId) return;
-  e.preventDefault();
-  document.querySelectorAll('.cards.over').forEach(x => x !== zone && x.classList.remove('over'));
-  zone.classList.add('over');
-});
-document.addEventListener('drop', async e => {
-  const zone = e.target.closest?.('.cards'); if (!zone || !dragId) return;
-  e.preventDefault();
-  const id = dragId; dragId = null;
-  const after = [...zone.querySelectorAll('.card:not(.dragging)')].find(c => e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2);
-  $('#sort').value = 'order';
-  await api('move_task', { id, column: zone.dataset.col, before: after?.dataset.id || '' }).catch(() => {});
-  load();
-});
-
-// ---------- Inline quick add ----------
-document.addEventListener('click', e => {
-  const q = e.target.closest('.quick button'); if (!q) return;
-  const wrap = q.parentElement, col = wrap.dataset.col;
-  wrap.innerHTML = '<input placeholder="Task title, Enter to add · Esc to cancel">';
-  const inp = wrap.firstChild; inp.focus();
-  inp.onkeydown = async ev => {
-    if (ev.key === 'Escape') return render();
-    if (ev.key !== 'Enter' || !inp.value.trim()) return;
-    await api('create_task', { title: inp.value.trim(), column: col }).catch(() => {});
-    await load();
-    document.querySelector(`.quick[data-col="${CSS.escape(col)}"] button`)?.click();
-  };
-  inp.onblur = () => setTimeout(() => document.activeElement !== inp && !inp.value && render(), 100);
-});
+    async function openQuick(col) { quickCol.value = col; quickText.value = ''; await Vue.nextTick(); quickEl.value?.focus(); }
+    async function addQuick(col) {
+      const v = quickText.value.trim(); if (!v) return;
+      quickText.value = '';
+      await api('create_task', { title: v, column: col }).catch(() => {});
+      await load(); quickEl.value?.focus(); // stay open for the next one
+    }
+    return { S, P, L, PRIO_COLOR, av, dragId, overCol, quickCol, quickText, quickEl,
+      lists, total, done, overdue, onOver, onDrop, openQuick, addQuick };
+  },
+}).mount('#board');
 
 // ---------- Markdown (sanitized: agents write this) + mermaid ----------
 DOMPurify.addHook('afterSanitizeAttributes', n => { if (n.tagName === 'A') { n.target = '_blank'; n.rel = 'noopener noreferrer'; } });
@@ -902,7 +1050,7 @@ function mermaidify(root) {
   });
   if (!nodes.length) return;
   // ponytail: 5 MB lib, loaded only when a diagram is on screen
-  mermaidP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/mermaid.min.js'; s.onload = res; s.onerror = rej; document.head.append(s); });
+  mermaidP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js'; s.integrity = 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.append(s); });
   mermaidP.then(() => {
     mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: isDark() ? 'dark' : 'default' });
     return mermaid.run({ nodes });
@@ -925,7 +1073,7 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
   const blocks = [...root.querySelectorAll('pre code')];
   if (!blocks.length) return;
   // ponytail: ~130 KB, loaded only when a code block is on screen
-  hljsP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'vendor/highlight.min.js'; s.onload = res; s.onerror = rej; document.head.append(s); })
+  hljsP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js'; s.integrity = 'sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.append(s); })
     .then(() => hljs.configure({ ignoreUnescapedHTML: true }));
   hljsP.then(() => blocks.forEach(b => {
     if (!b.dataset.highlighted && (!/language-/.test(b.className) || hljs.getLanguage(b.className.match(/language-([\w+-]+)/)?.[1] || ''))) hljs.highlightElement(b);
@@ -933,17 +1081,17 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
 }
 
 // ---------- Drawer (task details, autosave) ----------
-let openId = null, editingDesc = false;
+let openId = null;
 const drawer = $('#drawer');
 
 function openTask(id) {
-  closeSettings(); openId = id; editingDesc = false; renderDrawer(); drawer.classList.add('open'); $('#scrim').classList.add('show'); render();
+  closeSettings(); openId = S.openId = id; drawer.classList.add('open'); $('#scrim').classList.add('show');
   const h = PROJ + '/' + id;
   if (decodeURIComponent(location.hash.slice(1)) !== h) history.pushState(null, '', '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(id));
 }
 function closeTask() {
   if (!openId) return;
-  flush('title'); flush('desc'); openId = null; drawer.classList.remove('open'); if (!settingsEl.classList.contains('open')) $('#scrim').classList.remove('show'); render();
+  flush('title'); flush('desc'); openId = S.openId = null; drawer.classList.remove('open'); if (!settingsEl.classList.contains('open')) $('#scrim').classList.remove('show');
   if (decodeURIComponent(location.hash.slice(1)) !== PROJ) history.pushState(null, '', '#' + encodeURIComponent(PROJ));
 }
 // URLs: http://host/#project opens a board, #project/KB-12 a task; back/forward work.
@@ -958,14 +1106,6 @@ async function route() {
   if (byId(id)) openTask(id); else toast(`Task ${id} not found`);
 }
 window.addEventListener('hashchange', route);
-$('#dCopy').onclick = async () => {
-  await navigator.clipboard?.writeText(location.origin + location.pathname + '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(openId)).catch(() => {});
-  $('#dCopy').textContent = '✓'; setTimeout(() => $('#dCopy').textContent = '🔗', 1200);
-};
-$('#dWide').onclick = () => {
-  if (drawer.style.width === '100vw') drawer.style.width = drawer.dataset.prev || '';
-  else { drawer.dataset.prev = drawer.style.width; drawer.style.width = '100vw'; }
-};
 // Drag the left edge of any drawer to resize; width remembered per browser, double-click resets.
 document.querySelectorAll('.drawer').forEach(d => {
   const h = document.createElement('div'), key = 'kanban:w:' + d.id;
@@ -980,131 +1120,111 @@ document.querySelectorAll('.drawer').forEach(d => {
 });
 const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
 
-function renderDrawer() {
-  const t = byId(openId); if (!t) return;
-  $('#dId').textContent = t.id;
-  const opts = (list, cur) => list.map(([v, l]) => `<option value="${esc(v)}" ${v === (cur ?? '') ? 'selected' : ''}>${esc(l)}</option>`).join('');
-  const done = t.checklist.filter(c => c.done).length, n = t.checklist.length;
-  const freeLabels = B.labels.map(l => l.name).filter(l => !t.labels.includes(l));
-  $('#dBody').innerHTML = `
-  <div class="d-main">
-    <textarea class="d-title" data-f="title" rows="1">${esc(t.title)}</textarea>
-    <div class="d-sub">in <b>${esc(colName(t.column))}</b> · updated ${ago(t.updated)}</div>
+// Typed-text draft: while a field is focused it shows the draft, so a live reload can't overwrite it.
+const draft = () => Vue.reactive({ draft: null, orig: '', start(v) { this.draft = v; this.orig = v; }, end() { this.draft = null; } });
 
-    <div class="d-sec"><h4>Description ${editingDesc ? '' : '<button class="icon-btn" id="descEdit">✎ Edit</button>'}</h4>
-      ${editingDesc
-        ? `<textarea class="d-desc" data-f="desc" placeholder="Write in markdown… (\`\`\`mermaid blocks render as diagrams)">${esc(t.description)}</textarea>
-           <div class="hint">Markdown + mermaid · <b>Ctrl+Enter</b> or <b>Esc</b> to finish · saves as you type</div>`
-        : `<div class="md desc-view" id="descView" title="Click to edit">${t.description ? md(t.description) : '<span class="ph">Add a description… (markdown + mermaid supported)</span>'}</div>`}
-    </div>
-
-    <div class="d-sec"><h4>Checklist <span>${done}/${n}</span>${n ? `<span class="bar"><span style="width:${done / n * 100}%"></span></span>` : ''}</h4>
-      ${t.checklist.map((c, i) => `<label class="check ${c.done ? 'done' : ''}"><input type="checkbox" data-ck="${i}" ${c.done ? 'checked' : ''}><span>${esc(c.text)}</span>
-        <button class="icon-btn" data-rmck="${i}" aria-label="Remove item">✕</button></label>`).join('')}
-      <input class="add-line" id="ckIn" placeholder="+ Add item"></div>
-
-    <div class="d-sec"><h4>Comments · ${t.comments.length}</h4>
-      ${t.comments.map(c => `<div class="comment">${av(c.who)}<div class="bubble">
-        <div class="who"><b>${esc(c.who)}</b>${P[c.who]?.agent ? ' <span class="tag">agent</span>' : ''}<small>${ago(c.t)}</small></div>
-        <div class="md">${md(c.text)}</div></div></div>`).join('') || '<p class="ph" style="margin:0 0 8px">No comments yet.</p>'}
-      <div class="compose"><textarea id="cmIn" placeholder="Write a comment… (markdown supported)"></textarea>
-        <div class="row"><span class="hint" style="margin:0">Ctrl+Enter to send</span><button class="btn" id="cmSend">Comment</button></div></div></div>
-  </div>
-  <div class="d-side"><div class="props">
-    <label class="prop"><span>Status</span><select data-f="column">${opts(B.columns.map(c => [c.id, c.name]), t.column)}</select></label>
-    <label class="prop"><span>Priority</span><select data-f="priority">${opts(B.priorities.map(p => [p, p[0].toUpperCase() + p.slice(1)]), t.priority)}</select></label>
-    <label class="prop"><span>Assignee</span><select data-f="assignee">${opts([['', 'Unassigned'], ...B.members.filter(m => !(t.human && m.agent)).map(m => [m.name, m.name + (m.agent ? ' (agent)' : '')])], t.assignee)}</select></label>
-    <label class="prop"><span>Due date</span><input type="date" data-f="due" value="${esc(t.due || '')}"></label>
-    <div class="prop"><span>Link</span><div class="linkrow"><input type="url" data-f="link" placeholder="https://… PR, issue, doc" value="${esc(t.link || '')}">
-      ${/^https?:\/\//i.test(t.link || '') ? `<a href="${esc(t.link)}" target="_blank" rel="noopener noreferrer" title="Open link">↗</a>` : ''}</div></div>
-    <label class="prop"><span>Human</span><div class="hrow"><input type="checkbox" class="toggle" data-f="human" ${t.human ? 'checked' : ''}><small>Agents skip it</small></div></label>
-    <div class="prop"><span>Labels</span><div class="chips">${t.labels.map((l, i) => tag(l, `<button data-rmlabel="${i}" aria-label="Remove ${esc(l)}">×</button>`)).join('')}
-      <input id="labelIn" list="labelOpts" placeholder="+ label"><datalist id="labelOpts">${freeLabels.map(l => `<option value="${esc(l)}">`).join('')}</datalist></div></div>
-  </div></div>`;
-  grow($('.d-title'));
-  const d = $('.d-desc'); if (d) { grow(d); d.focus(); d.setSelectionRange(d.value.length, d.value.length); }
-  mermaidify($('#dBody'));
-  svgify($('#dBody'));
-  highlightCode($('#dBody'));
-}
-
-const patch = (fields) => api('update_task', { id: openId, ...fields }).then(load).catch(() => load());
-function finishDesc() { flush('desc'); editingDesc = false; renderDrawer(); }
-
-$('#dBody').addEventListener('input', e => {
-  const f = e.target.dataset.f, t = byId(openId); if (!t) return;
-  if (f === 'title') { grow(e.target); t.title = e.target.value; if (t.title.trim()) later('title', () => patch({ title: t.title })); }
-  if (f === 'desc') { grow(e.target); t.description = e.target.value; const id = openId, v = t.description; later('desc', () => api('update_task', { id, description: v }).catch(() => {}), 700); }
-});
-$('#dBody').addEventListener('focusout', e => {
-  if (e.target.matches('.d-desc')) finishDesc();
-  if (e.target.matches('.d-title')) flush('title');
-});
-$('#dBody').addEventListener('change', e => {
-  const t = byId(openId), el = e.target, f = el.dataset.f;
-  if (f === 'column') api('move_task', { id: t.id, column: el.value }).then(load).catch(() => load());
-  else if (['priority', 'assignee', 'due', 'link'].includes(f)) patch({ [f]: el.value.trim() });
-  else if (f === 'human') api('set_human', { id: t.id, human: el.checked }).then(load).catch(() => load());
-  else if (el.dataset.ck) { const ck = structuredClone(t.checklist); ck[el.dataset.ck].done = el.checked; patch({ checklist: ck }); }
-});
-$('#dBody').addEventListener('click', e => {
-  const t = byId(openId), el = e.target;
-  if (el.dataset.rmlabel) patch({ labels: t.labels.filter((_, i) => i !== +el.dataset.rmlabel) });
-  if (el.dataset.rmck) { e.preventDefault(); patch({ checklist: t.checklist.filter((_, i) => i !== +el.dataset.rmck) }); }
-  if (el.id === 'cmSend') sendComment();
-  if (el.id === 'descEdit' || (el.closest('#descView') && !el.closest('a, input, .mermaid, .svgview, svg'))) { editingDesc = true; renderDrawer(); }
-});
-let titleOrig = '';
-$('#dBody').addEventListener('focusin', e => { if (e.target.matches('.d-title')) titleOrig = byId(openId)?.title ?? ''; });
-$('#dBody').addEventListener('keydown', async e => {
-  const t = byId(openId), el = e.target, v = el.value?.trim(), mod = e.ctrlKey || e.metaKey;
-  if (el.id === 'cmIn' && mod && e.key === 'Enter') return sendComment();
-  if (mod && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); flush('title'); flush('desc'); el.blur?.(); return closeTask(); }
-  if (e.key === 'Tab' && !e.shiftKey && el.matches('.d-title')) { e.preventDefault(); flush('title'); editingDesc = true; return renderDrawer(); }
-  if (e.key === 'Escape' && el.matches('input, textarea, select')) {
-    e.stopPropagation();
-    if (el.matches('.d-title')) { // cancel: restore what was there before
-      clearTimeout(pending.title?.t); delete pending.title;
-      el.value = t.title = titleOrig; grow(el);
-      api('update_task', { id: t.id, title: titleOrig }).catch(() => {});
-    } else if (el.id === 'labelIn' && v) { // keep what you typed in tags
-      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); return;
-    } else if (el.dataset.f === 'link') el.value = t.link || '';
-    else if (el.id === 'ckIn') el.value = '';
-    // description and comment drafts are kept as typed
-    el.blur(); return;
-  }
-  if (e.key !== 'Enter') return;
-  if (el.id === 'labelIn' && v) {
-    e.preventDefault();
-    if (!L[v]) { // new label: add it to the board first
-      if (!confirm(`Create new label “${v}”?`)) return;
-      await api('save_labels', [...B.labels, { name: v, color: randColor() }]).catch(() => {});
-    }
-    if (!t.labels.includes(v)) await patch({ labels: [...t.labels, v] });
-    $('#labelIn')?.focus();
-  }
-  if (el.id === 'ckIn' && v) { await patch({ checklist: [...t.checklist, { text: v, done: false }] }); $('#ckIn')?.focus(); }
-  if (el.dataset.f === 'title') { e.preventDefault(); el.blur(); }
-});
-async function sendComment() {
-  const v = $('#cmIn').value.trim(); if (!v) return;
-  await api('add_comment', { id: openId, text: v }).catch(() => {});
-  $('#cmIn').value = ''; await load();
-}
-$('#dClose').onclick = closeTask;
-$('#dDel').onclick = async () => {
-  if (!confirm(`Delete ${openId}? This cannot be undone.`)) return;
-  const id = openId; closeTask();
-  await api('delete_task', { id }).catch(() => {}); load();
+// v-md: sanitized markdown + mermaid/svg/highlight, re-rendered only when the text changes (rethemeMd: theme).
+const vMd = {
+  mounted(el, b) { el._md = b.value; renderMd(el, b.value); },
+  updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
 };
+function renderMd(el, text) {
+  el.innerHTML = text ? md(text) : `<span class="ph">${esc(el.dataset.ph || '')}</span>`;
+  mermaidify(el); svgify(el); highlightCode(el);
+}
+const rethemeMd = () => document.querySelectorAll('.md').forEach(el => el._md != null && renderMd(el, el._md)); // re-theme mermaid
+
+const patch = fields => api('update_task', { id: openId, ...fields }).then(load).catch(() => load());
+
+Vue.createApp({
+  template: '#tpl-drawer',
+  directives: { md: vMd },
+  setup() {
+    const t = Vue.computed(() => S.B.tasks.find(x => x.id === S.openId));
+    const title = draft(), desc = draft();
+    const editingDesc = Vue.ref(false), ckText = Vue.ref(''), cmText = Vue.ref(''), labelText = Vue.ref(''), copied = Vue.ref(false);
+    const titleEl = Vue.ref(null), descEl = Vue.ref(null);
+    Vue.watch(() => S.openId, () => { editingDesc.value = false; title.end(); desc.end(); ckText.value = cmText.value = labelText.value = ''; });
+    const done = Vue.computed(() => t.value?.checklist.filter(c => c.done).length ?? 0);
+    const freeLabels = Vue.computed(() => S.B.labels.map(l => l.name).filter(l => !t.value?.labels.includes(l)));
+    Vue.onUpdated(() => titleEl.value && grow(titleEl.value));
+
+    function onTitle(e) {
+      grow(e.target); title.draft = e.target.value; const id = t.value.id, v = title.draft;
+      if (!v.trim()) return;
+      t.value.title = v; // shown after blur and on refocus, before the save lands
+      later('title', () => api('update_task', { id, title: v }).then(load).catch(() => load())); // this task, even if another opens first
+    }
+    const endTitle = () => { title.end(); flush('title'); };
+    function cancelTitle(e) {
+      clearTimeout(pending.title?.t); delete pending.title;
+      const v = title.orig; title.end(); t.value.title = e.target.value = v; grow(e.target);
+      api('update_task', { id: t.value.id, title: v }).catch(() => {}); e.target.blur();
+    }
+    async function editDesc() {
+      desc.start(t.value.description); editingDesc.value = true; await Vue.nextTick();
+      const d = descEl.value; if (d) { grow(d); d.focus(); d.setSelectionRange(d.value.length, d.value.length); }
+    }
+    function onDesc(e) {
+      grow(e.target); desc.draft = e.target.value; const id = t.value.id, v = desc.draft;
+      later('desc', () => api('update_task', { id, description: v }).then(load).catch(() => {}), 700);
+    }
+    function finishDesc() {
+      if (t.value && desc.draft != null) t.value.description = desc.draft; // show it until the reload lands
+      flush('desc'); desc.end(); editingDesc.value = false;
+    }
+    const onDescClick = e => { if (!e.target.closest('a, input, .mermaid, .svgview, svg')) editDesc(); };
+    // Ctrl/⌘+Enter anywhere in the drawer (except the comment box): save and close
+    function onKey(e) {
+      // Esc in a field without its own handler (selects, due date, toggles): leave the field, keep the drawer open
+      if (e.key === 'Escape' && e.target.matches('input, select, textarea')) { e.stopPropagation(); return e.target.blur(); }
+      if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
+      e.preventDefault(); e.stopPropagation(); flush('title'); flush('desc'); e.target.blur?.(); closeTask();
+    }
+    const toggleCheck = (i, v) => { const ck = structuredClone(Vue.toRaw(t.value.checklist)); ck[i].done = v; patch({ checklist: ck }); };
+    const removeCheck = i => patch({ checklist: t.value.checklist.filter((_, j) => j !== i) });
+    async function addCheck() { const v = ckText.value.trim(); if (!v) return; ckText.value = ''; await patch({ checklist: [...t.value.checklist, { text: v, done: false }] }); }
+    async function addLabel() {
+      const v = labelText.value.trim(); if (!v) return;
+      if (!L[v]) { // new label: add it to the board first
+        if (!confirm(`Create new label “${v}”?`)) return;
+        await api('save_labels', [...S.B.labels, { name: v, color: randColor() }]).catch(() => {});
+      }
+      labelText.value = '';
+      if (!t.value.labels.includes(v)) await patch({ labels: [...t.value.labels, v] });
+    }
+    async function sendComment() {
+      const v = cmText.value.trim(); if (!v) return;
+      await api('add_comment', { id: t.value.id, text: v }).then(() => { cmText.value = ''; }).catch(() => {});
+      load();
+    }
+    const move = col => api('move_task', { id: t.value.id, column: col }).then(load).catch(() => load());
+    const setHuman = v => api('set_human', { id: t.value.id, human: v }).then(load).catch(() => load());
+    async function copyLink() {
+      await navigator.clipboard?.writeText(location.origin + location.pathname + '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(t.value.id)).catch(() => {});
+      copied.value = true; setTimeout(() => copied.value = false, 1200);
+    }
+    function toggleWide() {
+      if (drawer.style.width === '100vw') drawer.style.width = drawer.dataset.prev || '';
+      else { drawer.dataset.prev = drawer.style.width; drawer.style.width = '100vw'; }
+    }
+    async function deleteTask() {
+      if (!confirm(`Delete ${t.value.id}? This cannot be undone.`)) return;
+      const id = t.value.id; closeTask();
+      await api('delete_task', { id }).catch(() => {}); load();
+    }
+    return { S, P, L, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
+      ago, av, colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
+      toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, deleteTask };
+  },
+}).mount('#dApp');
 
 // ---------- Appearance (per browser) ----------
 function setTheme(v) {
   const r = document.documentElement;
   v === 'system' || !v ? delete r.dataset.theme : r.dataset.theme = v;
   store.set('kanban:theme', v === 'system' ? null : v);
-  if (openId) renderDrawer(); // re-theme mermaid
+  rethemeMd();
 }
 function setAccent(c) {
   const s = document.documentElement.style;
@@ -1113,186 +1233,89 @@ function setAccent(c) {
   store.set('kanban:accent', c);
 }
 setTheme(store.get('kanban:theme') || 'system');
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (openId && !document.documentElement.dataset.theme) renderDrawer(); }); // re-theme mermaid
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!document.documentElement.dataset.theme) rethemeMd(); });
 setAccent(store.get('kanban:accent'));
 
 // ---------- Settings ----------
 const settingsEl = $('#settings');
-function openSettings() { if (openId) closeTask(); renderSettings(); settingsEl.classList.add('open'); $('#scrim').classList.add('show'); }
+function openSettings() { if (openId) closeTask(); S.settingsN++; settingsEl.classList.add('open'); $('#scrim').classList.add('show'); }
 function closeSettings() { if (!settingsEl.classList.contains('open')) return; Object.keys(pending).forEach(flush); settingsEl.classList.remove('open'); $('#scrim').classList.remove('show'); }
 $('#settingsBtn').onclick = openSettings;
-$('#sClose').onclick = closeSettings;
-$('#sNav').onclick = e => {
-  const b = e.target.closest('[data-go]'); if (!b) return;
-  $('#sNav .on')?.classList.remove('on'); b.classList.add('on');
-  document.getElementById(b.dataset.go).scrollIntoView({ behavior: 'smooth' });
-};
 
-function renderSettings() {
-  const S = B.settings, count = id => B.tasks.filter(t => t.column === id).length;
-  const theme = store.get('kanban:theme') || 'system', accent = store.get('kanban:accent');
-  const nextId = `${S.prefix}-${Math.max(0, ...B.tasks.map(t => +t.id.split('-').pop() || 0)) + 1}`;
-  const sel = (k, list) => `<select class="inp" data-s="${k}">${list.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(S[k] ?? '') ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-  const snip = (label, code) => `<div class="snippet"><div>${label}</div><pre>${esc(code)}</pre><button class="icon-btn" data-copy>Copy</button></div>`;
-  const origin = location.origin;
-  $('#sMain').innerHTML = `
-  <section class="s-sec" id="s-general"><h3>General</h3><p>Board-wide preferences, saved in <code>${esc(B.db)}</code>.</p>
-    <label class="field"><span>Board name</span><input class="inp" data-s="board" value="${esc(S.board)}"></label>
-    <label class="field"><span>Ticket prefix<small>New tickets look like <b>${esc(nextId)}</b></small></span>
-      <input class="inp" data-s="prefix" value="${esc(S.prefix)}" maxlength="6" style="max-width:120px;text-transform:uppercase"></label>
-    <label class="field"><span>Default column<small>Where “+ New task” lands</small></span>${sel('defaultCol', B.columns.map(c => [c.id, c.name]))}</label>
-    <label class="field"><span>Default assignee<small>For tasks created in the UI</small></span>${sel('defaultAssignee', [['', 'Unassigned'], ...B.members.map(m => [m.name, m.name])])}</label>
-    <label class="field"><span>Auto-archive<small>Hide tasks sitting in <b>${esc(colName(lastCol()))}</b> this long. They stay in the DB and show up in search.</small></span>
-      ${sel('archiveDays', [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']])}</label>
-  </section>
-
-  <section class="s-sec" id="s-columns"><h3>Columns</h3><p>Rename, recolor, set WIP limits (empty = no limit), reorder. Columns with tasks can't be deleted.</p>
-    <div class="list">${B.columns.map((c, i) => `<div class="row-i">
-      <input type="color" value="${esc(c.color)}" data-ci="${i}" data-k="color" aria-label="Column color">
-      <input class="inp grow" value="${esc(c.name)}" data-ci="${i}" data-k="name" aria-label="Column name">
-      <input class="inp num" type="number" min="1" placeholder="WIP" value="${c.wip || ''}" data-ci="${i}" data-k="wip" aria-label="WIP limit">
-      <span class="muted">${count(c.id)} task${count(c.id) === 1 ? '' : 's'}</span>
-      <button class="icon-btn" data-up="${i}" ${i ? '' : 'disabled'} aria-label="Move up">↑</button>
-      <button class="icon-btn" data-down="${i}" ${i < B.columns.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
-      <button class="icon-btn danger" data-delcol="${i}" ${count(c.id) || B.columns.length === 1 ? 'disabled title="Move its tasks out first"' : ''} aria-label="Delete column">✕</button>
-    </div>`).join('')}</div>
-    <button class="btn ghost" id="addCol" style="margin-top:10px">+ Add column</button>
-  </section>
-
-  <section class="s-sec" id="s-appearance"><h3>Appearance</h3><p>Stored per browser.</p>
-    <div class="field"><span>Theme</span><div class="seg">${[['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']].map(([v, l]) =>
-      `<button data-theme-set="${v}" class="${theme === v ? 'on' : ''}">${l}</button>`).join('')}</div></div>
-    <div class="field"><span>Accent color</span><div class="swatches">
-      <button data-accent="" class="${accent ? '' : 'on'}" style="background:var(--accent-def)" title="Theme default" aria-label="Theme default accent"></button>
-      ${ACCENTS.map(([n, c]) => `<button data-accent="${c}" class="${accent === c ? 'on' : ''}" style="background:${c}" title="${n}" aria-label="${n} accent"></button>`).join('')}</div></div>
-  </section>
-
-  <section class="s-sec" id="s-labels"><h3>Labels</h3><p>Agents can only use these. Rename or recolor everywhere at once; deleting removes the label from every task.</p>
-    <div class="list">${B.labels.map((l, i) => `<div class="row-i">
-      <input type="color" value="${esc(l.color)}" data-li="${i}" aria-label="Label color">
-      <input class="inp grow" value="${esc(l.name)}" data-lrename="${esc(l.name)}" aria-label="Label name">
-      ${tag(l.name)}<span class="muted">${l.tasks} task${l.tasks === 1 ? '' : 's'}</span>
-      <button class="icon-btn danger" data-dellbl="${i}" aria-label="Delete label">✕</button></div>`).join('') || '<div class="row-i muted">No labels yet.</div>'}</div>
-    <input class="inp" id="addLabel" placeholder="+ New label (Enter)" style="margin-top:10px">
-  </section>
-
-  <section class="s-sec" id="s-members"><h3>Members &amp; agents</h3><p>Shared by every project. Agents identify themselves with <code>?agent=name</code> on the MCP URL; unknown names join automatically as agents.</p>
-    <div class="list">${B.members.map((m, i) => `<div class="row-i">${av(m.name)}
-      <b class="grow">${esc(m.name)}</b>${m.name === ME() ? '<span class="muted">you</span>' : ''}
-      <input type="color" value="${esc(m.color)}" data-mi="${i}" data-k="color" aria-label="Color">
-      <select class="inp" style="width:110px;flex:none" data-mi="${i}" data-k="icon" aria-label="Icon">${Object.keys(GLYPH).map(k => `<option ${iconOf(m.name, m) === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
-      <label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-mi="${i}" data-k="agent" ${m.agent ? 'checked' : ''} style="accent-color:var(--accent)">agent</label>
-      <button class="icon-btn danger" data-delm="${i}" ${m.name === ME() ? 'disabled' : ''} aria-label="Remove">✕</button>
-    </div>`).join('')}</div>
-    <input class="inp" id="addPerson" placeholder="+ Add member or agent (Enter)" style="margin-top:10px">
-  </section>
-
-  <section class="s-sec" id="s-mcp"><h3>MCP &amp; skill</h3><p>This server is the only process that opens the database; agents connect to it over HTTP while it runs.</p>
-    ${snip('Claude Code (run inside the repo)', `claude mcp add --transport http kanban "${origin}/mcp?agent=claude&project=${PROJ}"`)}
-    ${snip('Codex: ~/.codex/config.toml', `[mcp_servers.kanban]\nurl = "${origin}/mcp?agent=codex&project=${PROJ}"`)}
-    ${snip('Any other agent (pi, opencode, …)', `${origin}/mcp?agent=<name>&project=${PROJ}`)}
-    ${snip('Install the kanban skill (teaches agents the workflow)', 'local-kanban skill install')}
-    <h4 style="margin:22px 0 4px">Agent permissions</h4>
-    <p class="hint" style="margin:0 0 10px">What MCP tools may do. Blocked calls return an error to the agent and show in Activity.</p>
-    <div class="list">${Object.entries(PERMS).map(([k, l]) => `<label class="row-i" style="cursor:pointer">
-      <span class="grow">${l}</span><input type="checkbox" class="toggle" data-perm="${k}" ${S.perms[k] ? 'checked' : ''}></label>`).join('')}</div>
-  </section>
-
-  <section class="s-sec" id="s-data"><h3>Data</h3><p>Everything lives in one Turso (SQLite-compatible) file. Back it up like any other file while the server is stopped.</p>
-    <div class="field"><span>Database</span><span><code>${esc(B.db)}</code> · ${B.tasks.length} tasks · ${B.tasks.reduce((n, t) => n + t.comments.length, 0)} comments</span></div>
-    <div class="field"><span>Cloud sync<small>Set in <code>.local-kanban.env</code> or env vars</small></span><span>${B.sync
-      ? `Turso Cloud <code>${esc(B.sync.remote)}</code> · ${B.sync.error ? `<span class="danger">failing: ${esc(B.sync.error)}</span>` : B.sync.lastPull ? 'synced ' + ago(B.sync.lastPull) : 'starting…'}`
-      : 'Off (local only). Set <code>LOCAL_KANBAN_TURSO_URL</code> and <code>LOCAL_KANBAN_TURSO_TOKEN</code> to enable.'}</span></div>
-    <div class="field"><span>Backup</span><span style="display:flex;gap:8px;flex-wrap:wrap">
-      <a class="btn ghost" href="api/p/${encodeURIComponent(PROJ)}/export" download style="text-decoration:none">Export JSON</a>
-      <label class="btn ghost">Import JSON<input type="file" id="importIn" accept="application/json" hidden></label></span></div>
-    <div class="danger-zone"><div><b>Delete all tasks</b><small>Columns, members, labels and settings are kept. Cannot be undone.</small></div>
-      <button class="btn red" id="resetBtn">Delete tasks</button></div>
-    <div class="danger-zone"><div><b>Delete project “${esc(S.board)}”</b><small>Removes the project with all its tasks, comments and history. Members stay. Cannot be undone.</small></div>
-      <button class="btn red" id="delProj" ${PROJECTS.length < 2 ? 'disabled title="Can\'t delete the last project"' : ''}>Delete project</button></div>
-  </section>`;
-}
-
-const saveSettings = () => later('settings', () => api('save_settings', B.settings).then(load).catch(load));
-const saveCols = () => later('cols', () => api('save_columns', B.columns).then(load).catch(load));
-const saveMembers = () => later('members', () => api('save_members', B.members).then(load).catch(load));
-const saveLabels = () => later('labels', () => api('save_labels', B.labels).then(load).catch(load));
-
-$('#sMain').addEventListener('input', e => {
-  const el = e.target, k = el.dataset.k;
-  if (el.dataset.s) {
-    B.settings[el.dataset.s] = el.dataset.s === 'archiveDays' ? +el.value : el.value;
-    if (el.dataset.s === 'board') $('#boardName').textContent = el.value;
-    saveSettings();
-  } else if (el.dataset.ci) {
-    B.columns[el.dataset.ci][k] = k === 'wip' ? Math.max(0, +el.value || 0) : el.value; saveCols();
-  } else if (el.dataset.mi) {
-    B.members[el.dataset.mi][k] = k === 'agent' ? el.checked : el.value; saveMembers();
-  } else if (el.dataset.li) {
-    B.labels[el.dataset.li].color = el.value; L[B.labels[el.dataset.li].name] = el.value; saveLabels();
-  } else if (el.dataset.perm) {
-    B.settings.perms[el.dataset.perm] = el.checked; saveSettings();
-  } else return;
-  render();
-});
-$('#sMain').addEventListener('click', async e => {
-  const el = e.target.closest('button'); if (!el) return;
-  const d = el.dataset, i = +(d.up ?? d.down ?? d.delcol ?? d.delm ?? d.dellbl);
-  const cols = [...B.columns];
-  try {
-    if (d.up) { [cols[i - 1], cols[i]] = [cols[i], cols[i - 1]]; await api('save_columns', cols); }
-    else if (d.down) { [cols[i + 1], cols[i]] = [cols[i], cols[i + 1]]; await api('save_columns', cols); }
-    else if (d.delcol) { cols.splice(i, 1); await api('save_columns', cols); }
-    else if (el.id === 'addCol') await api('save_columns', [...cols, { id: 'c' + Date.now().toString(36), name: 'New column', color: '#7f848e' }]);
-    else if (d.themeSet) { setTheme(d.themeSet); return renderSettings(); }
-    else if ('accent' in d) { setAccent(d.accent || null); return renderSettings(); }
-    else if (d.delm) {
-      if (!confirm(`Remove ${B.members[i].name}? Their tasks become unassigned.`)) return;
-      await api('save_members', B.members.filter((_, j) => j !== i));
+const clone = x => JSON.parse(JSON.stringify(x));
+Vue.createApp({
+  template: '#tpl-settings',
+  setup() {
+    const f = Vue.reactive({ settings: null, columns: [], members: [], labels: [] });
+    const sync = () => Object.assign(f, clone({ settings: S.B.settings, columns: S.B.columns, members: S.B.members, labels: S.B.labels }));
+    const quiet = () => !typingIn(settingsEl) && !Object.keys(pending).length;
+    Vue.watch(() => S.settingsN, sync);                                                // opened
+    Vue.watch(() => S.B, () => settingsEl.classList.contains('open') && quiet() && sync()); // live update
+    const refresh = async () => { await load(); sync(); };
+    const NAV = [['s-general', 'General'], ['s-columns', 'Columns'], ['s-appearance', 'Appearance'], ['s-labels', 'Labels'],
+      ['s-members', 'Members & agents'], ['s-mcp', 'MCP & skill'], ['s-data', 'Data']];
+    const navOn = Vue.ref('s-general'), mainEl = Vue.ref(null), copied = Vue.ref(-1), newLabel = Vue.ref(''), newMember = Vue.ref('');
+    const theme = Vue.ref(store.get('kanban:theme') || 'system'), accent = Vue.ref(store.get('kanban:accent'));
+    const go = id => { navOn.value = id; mainEl.value?.querySelector('#' + id)?.scrollIntoView({ behavior: 'smooth' }); };
+    const counts = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) n[t.column] = (n[t.column] || 0) + 1; return n; });
+    const count = id => counts.value[id] || 0;
+    const nextId = Vue.computed(() => `${(f.settings.prefix || 'KB').toUpperCase()}-${Math.max(0, ...S.B.tasks.map(t => +t.id.split('-').pop() || 0)) + 1}`);
+    const snippets = Vue.computed(() => [
+      ['Claude Code (run inside the repo)', `claude mcp add --transport http kanban "${location.origin}/mcp?agent=claude&project=${S.proj}"`],
+      ['Codex: ~/.codex/config.toml', `[mcp_servers.kanban]\nurl = "${location.origin}/mcp?agent=codex&project=${S.proj}"`],
+      ['Any other agent (pi, opencode, …)', `${location.origin}/mcp?agent=<name>&project=${S.proj}`],
+      ['Install the kanban skill (teaches agents the workflow)', 'agent-kanban skill install'],
+    ]);
+    const saveSettings = () => later('settings', () => api('save_settings', clone(f.settings)).then(load).catch(load));
+    const saveCols = () => later('cols', () => api('save_columns', clone(f.columns)).then(load).catch(load));
+    const saveMembers = () => later('members', () => api('save_members', clone(f.members)).then(load).catch(load));
+    const saveLabels = () => later('labels', () => api('save_labels', clone(f.labels)).then(load).catch(load));
+    const setHeader = () => $('#boardName').textContent = f.settings.board;
+    const act = async fn => { try { await fn(); } catch { /* toast already shown */ } await refresh(); };
+    const moveCol = (i, d) => act(() => { const c = clone(f.columns); [c[i], c[i + d]] = [c[i + d], c[i]]; return api('save_columns', c); });
+    const delCol = i => act(() => api('save_columns', clone(f.columns).filter((_, j) => j !== i)));
+    async function addCol() {
+      await act(() => api('save_columns', [...clone(f.columns), { id: 'c' + Date.now().toString(36), name: 'New column', color: '#7f848e' }]));
+      await Vue.nextTick(); mainEl.value?.querySelector('#s-columns .row-i:last-child .grow')?.select();
     }
-    else if (d.dellbl) {
-      const l = B.labels[i];
+    const renameLabel = (from, to) => { to = to.trim(); return to && to !== from ? act(() => api('rename_label', { from, to })) : null; };
+    function delLabel(i) {
+      const l = f.labels[i];
       if (l.tasks && !confirm(`Remove “${l.name}” from ${l.tasks} task(s)?`)) return;
-      await api('save_labels', B.labels.filter((_, j) => j !== i));
+      act(() => api('save_labels', clone(f.labels).filter((_, j) => j !== i)));
     }
-    else if ('copy' in d) { await navigator.clipboard?.writeText(el.previousElementSibling.textContent).catch(() => {}); el.textContent = 'Copied'; setTimeout(() => el.textContent = 'Copy', 1500); return; }
-    else if (el.id === 'delProj') {
-      if (prompt(`Type “${B.settings.board}” to delete this project and all its tasks`) !== B.settings.board) return;
-      await post('/api/projects/remove', { id: PROJ }); closeSettings(); await loadProjects(); return switchProject(PROJECTS[0]?.id);
+    async function addLabel() {
+      const v = newLabel.value.trim(); if (!v) return;
+      if (L[v]) return toast(`Label “${v}” already exists`);
+      newLabel.value = ''; await act(() => api('save_labels', [...clone(f.labels), { name: v, color: randColor() }]));
     }
-    else if (el.id === 'resetBtn') { if (!confirm(`Delete all ${B.tasks.length} tasks? This cannot be undone.`)) return; await api('delete_all_tasks'); }
-    else return;
-  } catch { /* toast already shown */ }
-  await load(); renderSettings();
-  if (el.id === 'addCol') $('#s-columns .row-i:last-child .grow')?.select();
-});
-$('#sMain').addEventListener('change', async e => {
-  const el = e.target;
-  if (el.dataset.lrename != null) { // rename on commit, not per keystroke
-    const from = el.dataset.lrename, to = el.value.trim();
-    if (to && to !== from) await api('rename_label', { from, to }).catch(() => {});
-    await load(); return renderSettings();
-  }
-  if (el.id !== 'importIn' || !el.files[0]) return;
-  try {
-    const data = JSON.parse(await el.files[0].text());
-    if (!confirm(`Replace the whole board with ${data.tasks?.length ?? 0} imported tasks?`)) return;
-    await api('import', data); await load(); renderSettings();
-  } catch (err) { toast('Import failed: ' + err.message); }
-});
-$('#sMain').addEventListener('keydown', async e => {
-  if (e.key !== 'Enter') return;
-  const v = e.target.value?.trim();
-  if (e.target.id === 'addLabel' && v) {
-    if (L[v]) return toast(`Label “${v}” already exists`);
-    await api('save_labels', [...B.labels, { name: v, color: randColor() }]).catch(() => {});
-  } else if (e.target.id === 'addPerson' && v) {
-    const name = v.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 32);
-    if (!name || P[name]) return toast(name ? `${name} already exists` : 'Invalid name');
-    await api('save_members', [...B.members, { name, color: randColor(), agent: false }]).catch(() => {});
-  } else return;
-  await load(); renderSettings(); $('#' + e.target.id)?.focus();
-});
+    function delMember(i) {
+      if (!confirm(`Remove ${f.members[i].name}? Their tasks become unassigned.`)) return;
+      act(() => api('save_members', clone(f.members).filter((_, j) => j !== i)));
+    }
+    async function addMember() {
+      const name = newMember.value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 32);
+      if (!name || P[name]) return toast(name ? `${name} already exists` : 'Invalid name');
+      newMember.value = ''; await act(() => api('save_members', [...clone(f.members), { name, color: randColor(), agent: false }]));
+    }
+    async function copy(code, i) { await navigator.clipboard?.writeText(code).catch(() => {}); copied.value = i; setTimeout(() => copied.value = -1, 1500); }
+    async function importFile(e) {
+      const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        if (!confirm(`Replace the whole board with ${data.tasks?.length ?? 0} imported tasks?`)) return;
+        await act(() => api('import', data));
+      } catch (err) { toast('Import failed: ' + err.message); }
+    }
+    function deleteAll() { if (confirm(`Delete all ${S.B.tasks.length} tasks? This cannot be undone.`)) act(() => api('delete_all_tasks')); }
+    return { S, f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets,
+      ARCHIVE: [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']],
+      THEMES: [['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']], ACCENTS, PERMS, GLYPH,
+      av, ago, iconOf, ME, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
+      saveSettings, saveCols, saveMembers, saveLabels, moveCol, delCol, addCol, renameLabel, delLabel, addLabel,
+      delMember, addMember, copy, importFile, deleteAll };
+  },
+}).mount('#setApp');
 
 // ---------- Controls ----------
 document.addEventListener('click', e => {
@@ -1303,21 +1326,17 @@ $('#scrim').onclick = () => { closeTask(); closeSettings(); };
 $('#new').onclick = async e => {
   e.stopPropagation();
   const t = await api('create_task', { title: 'Untitled task' }).catch(() => null); if (!t) return;
-  await load(); openTask(t.id); $('.d-title').select();
+  await load(); openTask(t.id); await Vue.nextTick(); $('.d-title')?.select();
 };
-['#q', '#sort', '#who'].forEach(s => $(s).addEventListener('input', render));
+['q', 'sort', 'who'].forEach(k => $('#' + k).addEventListener('input', e => S[k] = e.target.value));
 $('#rSearch').onclick = () => openPalette();
 $('#rNew').onclick = e => $('#new').onclick(e);
 const setPanel = on => { $('main').classList.toggle('noside', !on); $('#rPanel').classList.toggle('on', on); store.set('kanban:panel', on ? null : 'off'); };
 $('#rPanel').onclick = () => setPanel($('main').classList.contains('noside'));
 setPanel(store.get('kanban:panel') !== 'off');
-document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('.tabs button, .pane').forEach(x => x.classList.remove('on'));
-  b.classList.add('on'); $('#' + b.dataset.pane).classList.add('on');
-});
 $('#q').addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }                       // keep the filter
-  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; render(); e.target.blur(); } // clear it
+  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = S.q = ''; e.target.blur(); } // clear it
 });
 document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return pal.classList.contains('open') ? closePalette() : openPalette(); }
@@ -1333,7 +1352,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'n') { e.preventDefault(); $('#new').click(); }
   if (e.key === ',') { e.preventDefault(); openSettings(); }
 });
-setInterval(() => { renderFeed(); }, 30000);
 
 connect();
 </script>

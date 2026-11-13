@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Rishang/local-kanban/internal/store"
+	"github.com/Rishang/agent-kanban/internal/store"
 )
 
 type opFunc func(s *store.Store, who string, body []byte) (any, error)

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <title>local-kanban</title>
+  <title>agent-kanban</title>
   <rect width="64" height="64" rx="15" fill="#111317"/>
   <rect x=".75" y=".75" width="62.5" height="62.5" rx="14.25" fill="none" stroke="#fff" stroke-opacity=".08" stroke-width="1.5"/>
   <rect x="10.5" y="13" width="12.5" height="32" rx="4" fill="#61afef"/>

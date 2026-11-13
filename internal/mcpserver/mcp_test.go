@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Rishang/local-kanban/internal/store"
+	"github.com/Rishang/agent-kanban/internal/store"
 )
 
 var cols = []store.Column{{ID: "todo", Name: "Todo"}, {ID: "doing", Name: "In Progress", WIP: 1}, {ID: "review", Name: "Review"}, {ID: "done", Name: "Done"}}
@@ -69,11 +69,14 @@ func TestPickNext(t *testing.T) {
 	}
 }
 
-func TestNoDue(t *testing.T) {
-	for name, sc := range map[string]any{"input": noDue[store.TaskInput](), "patch": noDue[store.TaskPatch](), "many": noDue[CreateMany]()} {
+func TestAgentSchema(t *testing.T) {
+	for name, sc := range map[string]any{"input": agentSchema[store.TaskInput](), "patch": agentSchema[store.TaskPatch](), "many": agentSchema[CreateMany]()} {
 		b, _ := json.Marshal(sc)
 		if strings.Contains(string(b), `"due"`) {
 			t.Errorf("%s schema still has due: %s", name, b)
+		}
+		if !strings.Contains(string(b), `"enum":["","urgent","high","medium","low"`) {
+			t.Errorf("%s schema has no priority enum: %s", name, b)
 		}
 	}
 }

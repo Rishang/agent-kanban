@@ -89,7 +89,7 @@ func Open(path, me string, sc *SyncConfig) (*DB, error) {
 		d.syncSt.Remote = redactURL(sc.URL)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		d.sdb, err = turso.NewTursoSyncDb(ctx, turso.TursoSyncDbConfig{Path: path, RemoteUrl: sc.URL, AuthToken: sc.Token, ClientName: "local-kanban"})
+		d.sdb, err = turso.NewTursoSyncDb(ctx, turso.TursoSyncDbConfig{Path: path, RemoteUrl: sc.URL, AuthToken: sc.Token, ClientName: "agent-kanban"})
 		if err == nil {
 			d.db, err = d.sdb.Connect(ctx)
 		}

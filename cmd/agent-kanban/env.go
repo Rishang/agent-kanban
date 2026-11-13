@@ -41,6 +41,16 @@ func loadEnvFile(path string) error {
 	return sc.Err()
 }
 
+// warnLegacyEnv flags LOCAL_KANBAN_* variables (env or .env) from before the rename: they are ignored,
+// so e.g. a sync URL under the old name would silently leave this machine local-only.
+func warnLegacyEnv() {
+	for _, kv := range os.Environ() {
+		if k, _, _ := strings.Cut(kv, "="); strings.HasPrefix(k, "LOCAL_KANBAN_") {
+			fmt.Fprintf(os.Stderr, "warning: %s is ignored since the rename; use AGENT_KANBAN_%s\n", k, strings.TrimPrefix(k, "LOCAL_KANBAN_"))
+		}
+	}
+}
+
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

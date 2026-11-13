@@ -1,11 +1,11 @@
 ---
 name: kanban
-description: Track and update work on the project's local kanban board (local-kanban MCP server). Use when starting, progressing, finishing or planning tasks, when the user mentions the board, tickets, a task id like KB-12, backlog, todo or "what should I work on", or asks to create, move, comment on or close a task.
+description: Track and update work on the project's local kanban board (agent-kanban MCP server). Use when starting, progressing, finishing or planning tasks, when the user mentions the board, tickets, a task id like KB-12, backlog, todo or "what should I work on", or asks to create, move, comment on or close a task.
 ---
 
 # Local Kanban workflow
 
-Boards for every project live in one local database served by `local-kanban`; you reach the current project's board through the `kanban` MCP tools (the MCP URL's `?project=` picks the project). Humans watch it live in the browser, so keep it truthful.
+Boards for every project live in one local database served by `agent-kanban`; you reach the current project's board through the `kanban` MCP tools (the MCP URL's `?project=` picks the project). Humans watch it live in the browser, so keep it truthful.
 
 ## The loop: use the board proactively
 

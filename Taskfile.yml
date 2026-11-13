@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  BIN: ./bin/local-kanban
+  BIN: ./bin/agent-kanban
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
   STATICCHECK: honnef.co/go/tools/cmd/staticcheck@v0.8.2
@@ -10,19 +10,19 @@ tasks:
   build:
     desc: Build the single binary into ./bin/
     cmds:
-      - go build -trimpath -ldflags "-s -w -X main.version={{.VERSION}}" -o {{.BIN}} ./cmd/local-kanban
+      - go build -trimpath -ldflags "-s -w -X main.version={{.VERSION}}" -o {{.BIN}} ./cmd/agent-kanban
 
   run:
     desc: Run the server with your real config (~/.config/kanban)
     cmds:
-      - go run ./cmd/local-kanban {{.CLI_ARGS}}
+      - go run ./cmd/agent-kanban {{.CLI_ARGS}}
 
   dev:
     desc: Run against a throwaway config in ./tmp on :7788 (safe to rm -rf tmp)
     env:
-      LOCAL_KANBAN_CONFIG_PATH: ./tmp
+      AGENT_KANBAN_CONFIG_PATH: ./tmp
     cmds:
-      - go run ./cmd/local-kanban --addr 127.0.0.1:7788 {{.CLI_ARGS}}
+      - go run ./cmd/agent-kanban --addr 127.0.0.1:7788 {{.CLI_ARGS}}
 
   fmt:
     desc: Format Go code and tidy modules

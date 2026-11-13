@@ -1,15 +1,15 @@
 <div align="center">
 
-<img src="web/logo.svg" width="64" alt="local-kanban logo">
+<img src="web/logo.svg" width="64" alt="agent-kanban logo">
 
-# local-kanban
+# agent-kanban
 
 **Hand your agent a ticket. Watch it ship.**
 
 A local kanban board your coding agents work on alongside you: Claude Code, Codex, opencode, pi,
 anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one local database, zero cloud.
 
-[Quick start](#quick-start) · [Demos](#see-it-work) · [Download](https://github.com/Rishang/local-kanban/releases/latest)
+[Quick start](#quick-start) · [Demos](#see-it-work) · [Download](https://github.com/Rishang/agent-kanban/releases/latest)
 
 </div>
 
@@ -24,9 +24,9 @@ anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one 
 ## Quick start
 
 ```sh
-task build                       # → ./bin/local-kanban
-cd ~/code/my-app && local-kanban # board at http://127.0.0.1:7777/#my-app
-local-kanban skill install       # teaches Claude Code / Codex the board workflow in this project (--global: for all projects)
+task build                       # → ./bin/agent-kanban
+cd ~/code/my-app && agent-kanban # board at http://127.0.0.1:7777/#my-app
+agent-kanban skill install       # teaches Claude Code / Codex the board workflow in this project (--global: for all projects)
 ```
 
 Connect an agent (inside the repo):
@@ -64,7 +64,7 @@ Anything else: `http://127.0.0.1:7777/mcp?agent=<name>&project=<project>`.
 | 📁 | **Multi-project** | Each repo is a project in one shared database; task URLs like `/#my-app/KB-12` |
 | 🎨 | **Themes** | Warm light and dark themes, eleven accents |
 | ☁️ | **Optional sync** | Turso Cloud sync to share boards across machines; local-only by default |
-| 📦 | **One binary** | UI, database engine and libraries embedded; Linux, macOS and Windows builds |
+| 📦 | **One binary** | Server, UI and database engine embedded; the browser loads Vue, markdown and diagram libraries from jsDelivr (pinned, SRI-checked), so the UI needs internet |
 
 ## See it work
 
@@ -83,7 +83,7 @@ Drag cards between columns with WIP limits. Open one for markdown, syntax-highli
 
 ### 📁 Every repo is a project
 
-Run `local-kanban` in a repo and it joins the board, named after the git root. Switch projects in one click.
+Run `agent-kanban` in a repo and it joins the board, named after the git root. Switch projects in one click.
 
 ![Switching between projects](.github/images/projects.gif)
 
@@ -119,15 +119,53 @@ Prompts: **`plan`** breaks a goal into tasks, **`standup`** summarizes the board
 
 ## Configuration
 
-Everything lives in `~/.config/kanban/` (override with `LOCAL_KANBAN_CONFIG_PATH`):
+Everything lives in `~/.config/kanban/` (override with `AGENT_KANBAN_CONFIG_PATH`):
 
 | File | Holds |
 |---|---|
 | `kanban.db` | every project's board |
 | `settings.json` | `addr` (default `127.0.0.1:7777`), `user`, `syncInterval` |
-| `.env` | optional Turso Cloud sync: `LOCAL_KANBAN_TURSO_URL`, `LOCAL_KANBAN_TURSO_TOKEN` |
+| `.env` | optional sync remote: `AGENT_KANBAN_TURSO_URL`, `AGENT_KANBAN_TURSO_TOKEN` |
 
 Precedence: flags > environment > `.env` > `settings.json`.
+
+### Sync across machines (optional)
+
+Local-only by default. Set a remote in `~/.config/kanban/.env` and every machine keeps its own `kanban.db`,
+pushes edits shortly after they happen and pulls others' every `syncInterval` (default `30s`). One remote
+holds all projects.
+
+**Option A: Turso Cloud** (managed)
+
+```sh
+turso db create kanban && turso db show kanban --url && turso db tokens create kanban
+```
+
+```sh
+# ~/.config/kanban/.env
+AGENT_KANBAN_TURSO_URL=libsql://kanban-<org>.turso.io
+AGENT_KANBAN_TURSO_TOKEN=eyJ...
+```
+
+**Option B: self-hosted** (`tursodb` sync server, same protocol as Turso Cloud)
+
+```sh
+# on the machine that holds the shared copy (download tursodb from github.com/tursodatabase/turso/releases)
+tursodb ./kanban-remote.db --sync-server 0.0.0.0:8080
+```
+
+```sh
+# ~/.config/kanban/.env on every machine
+AGENT_KANBAN_TURSO_URL=http://my-server:8080
+# AGENT_KANBAN_TURSO_TOKEN is optional for a self-hosted server
+```
+
+Notes:
+- The self-hosted server has no auth or TLS of its own: keep it on a private network or VPN
+  (e.g. Tailscale), or put it behind a reverse proxy. Turso documents it for development and testing.
+- The first start with sync needs the remote, to set up the local copy. Start with a fresh `--db` when you
+  turn sync on; an existing local database is not merged in.
+- Conflicts resolve as last push wins. Sync is new here; keep JSON exports (Settings → Data) as backups.
 
 ## Keyboard
 

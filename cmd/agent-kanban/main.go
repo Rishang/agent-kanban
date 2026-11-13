@@ -1,4 +1,4 @@
-// Command local-kanban serves kanban boards for every project from one local Turso
+// Command agent-kanban serves kanban boards for every project from one local Turso
 // database, with a web UI and an MCP endpoint for coding agents.
 package main
 
@@ -21,28 +21,28 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Rishang/local-kanban/internal/api"
-	"github.com/Rishang/local-kanban/internal/mcpserver"
-	"github.com/Rishang/local-kanban/internal/skill"
-	"github.com/Rishang/local-kanban/internal/store"
-	"github.com/Rishang/local-kanban/web"
+	"github.com/Rishang/agent-kanban/internal/api"
+	"github.com/Rishang/agent-kanban/internal/mcpserver"
+	"github.com/Rishang/agent-kanban/internal/skill"
+	"github.com/Rishang/agent-kanban/internal/store"
+	"github.com/Rishang/agent-kanban/web"
 )
 
 var version = "dev" // set with -ldflags "-X main.version=..."
 
-const usage = `local-kanban — kanban boards for humans and coding agents
+const usage = `agent-kanban — kanban boards for humans and coding agents
 
 Usage:
-  local-kanban [serve] [--addr 127.0.0.1:7777] [--db FILE]
+  agent-kanban [serve] [--addr 127.0.0.1:7777] [--db FILE]
       Start the server and register the current project (git root, or this folder).
       If a server is already running, just register the project with it.
-  local-kanban skill install [--global] [--dir DIR]...
-  local-kanban version
+  agent-kanban skill install [--global] [--dir DIR]...
+  agent-kanban version
 
-Everything lives in the config folder ($LOCAL_KANBAN_CONFIG_PATH, default ~/.config/kanban):
+Everything lives in the config folder ($AGENT_KANBAN_CONFIG_PATH, default ~/.config/kanban):
   kanban.db       every project's board
   settings.json   addr, user, syncInterval
-  .env            secrets: LOCAL_KANBAN_TURSO_URL, LOCAL_KANBAN_TURSO_TOKEN (optional Turso Cloud sync)
+  .env            secrets: AGENT_KANBAN_TURSO_URL, AGENT_KANBAN_TURSO_TOKEN (optional sync: Turso Cloud or a self-hosted tursodb --sync-server)
 
 Precedence: flags > environment variables > .env > settings.json.
 `
@@ -85,7 +85,7 @@ func main() {
 
 // configDir returns (and creates) the config folder.
 func configDir() (string, error) {
-	dir := os.Getenv("LOCAL_KANBAN_CONFIG_PATH")
+	dir := os.Getenv("AGENT_KANBAN_CONFIG_PATH")
 	if dir == "" {
 		base, err := os.UserConfigDir()
 		if err != nil {
@@ -118,10 +118,11 @@ func loadSettings(dir string) (Settings, error) {
 	return st, nil
 }
 
-const envTemplate = `# local-kanban secrets. Real environment variables win over this file.
-# Optional Turso Cloud sync for every project:
-# LOCAL_KANBAN_TURSO_URL=libsql://my-kanban-myorg.turso.io
-# LOCAL_KANBAN_TURSO_TOKEN=
+const envTemplate = `# agent-kanban secrets. Real environment variables win over this file.
+# Optional sync for every project: Turso Cloud (libsql://..., token required)
+# or a self-hosted "tursodb --sync-server" (http://host:8080, token optional):
+# AGENT_KANBAN_TURSO_URL=libsql://my-kanban-myorg.turso.io
+# AGENT_KANBAN_TURSO_TOKEN=
 `
 
 func serve(args []string) error {
@@ -136,13 +137,14 @@ func serve(args []string) error {
 	if err := loadEnvFile(envPath); err != nil {
 		return err
 	}
+	warnLegacyEnv()
 	st, err := loadSettings(dir)
 	if err != nil {
 		return err
 	}
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
-	addr := fs.String("addr", envOr("LOCAL_KANBAN_ADDR", st.Addr), "listen address (loopback only)")
-	dbPath := fs.String("db", envOr("LOCAL_KANBAN_DB", filepath.Join(dir, "kanban.db")), "database file")
+	addr := fs.String("addr", envOr("AGENT_KANBAN_ADDR", st.Addr), "listen address (loopback only)")
+	dbPath := fs.String("db", envOr("AGENT_KANBAN_DB", filepath.Join(dir, "kanban.db")), "database file")
 	fs.Parse(args)
 
 	projDir, projName := currentProject()
@@ -151,7 +153,7 @@ func serve(args []string) error {
 	ln, err := net.Listen("tcp", *addr)
 	if err != nil {
 		if p, rerr := registerWithRunning(*addr, projName, projDir); rerr == nil {
-			fmt.Printf("local-kanban is already running at http://%s\n  project  %s (%s)\n  board    http://%s/#%s\n  mcp      http://%s/mcp?agent=<name>&project=%s\n",
+			fmt.Printf("agent-kanban is already running at http://%s\n  project  %s (%s)\n  board    http://%s/#%s\n  mcp      http://%s/mcp?agent=<name>&project=%s\n",
 				*addr, p.Name, p.ID, *addr, p.ID, *addr, p.ID)
 			return nil
 		}
@@ -169,10 +171,10 @@ func serve(args []string) error {
 	d, err := store.Open(*dbPath, me, sc)
 	if err != nil {
 		if strings.Contains(err.Error(), "locked") {
-			return fmt.Errorf("%s is already open by another local-kanban process: %w", *dbPath, err)
+			return fmt.Errorf("%s is already open by another agent-kanban process: %w", *dbPath, err)
 		}
 		if sc != nil {
-			return fmt.Errorf("%w\n\nTurso sync must reach the remote when it first sets up %s. Check the URL, token and network,\nor unset LOCAL_KANBAN_TURSO_URL (env or %s) to run local-only", err, *dbPath, envPath)
+			return fmt.Errorf("%w\n\nTurso sync must reach the remote when it first sets up %s. Check the URL, token and network,\nor unset AGENT_KANBAN_TURSO_URL (env or %s) to run local-only", err, *dbPath, envPath)
 		}
 		return err
 	}
@@ -190,7 +192,7 @@ func serve(args []string) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		BaseContext:       func(net.Listener) context.Context { return ctx }, // ends SSE streams on shutdown
 	}
-	fmt.Printf("local-kanban %s\n  board    %s/#%s\n  project  %s (%s)\n  mcp      %s/mcp?agent=<name>&project=%s\n  config   %s\n",
+	fmt.Printf("agent-kanban %s\n  board    %s/#%s\n  project  %s (%s)\n  mcp      %s/mcp?agent=<name>&project=%s\n  config   %s\n",
 		version, base, p.ID, p.Name, p.ID, base, p.ID, dir)
 	if sc != nil {
 		fmt.Printf("  sync     %s every %s\n", d.SyncRemote(), sc.Interval)
@@ -228,7 +230,7 @@ func currentProject() (dir, name string) {
 	}
 }
 
-// registerWithRunning adds this project to a local-kanban already listening on addr.
+// registerWithRunning adds this project to a agent-kanban already listening on addr.
 func registerWithRunning(addr, name, dir string) (store.Project, error) {
 	var p store.Project
 	body, _ := json.Marshal(map[string]string{"name": name, "dir": dir})
@@ -244,17 +246,18 @@ func registerWithRunning(addr, name, dir string) (store.Project, error) {
 	return p, json.NewDecoder(resp.Body).Decode(&p)
 }
 
-// syncConfig returns nil (local only) unless LOCAL_KANBAN_TURSO_URL is set.
+// syncConfig returns nil (local only) unless AGENT_KANBAN_TURSO_URL is set.
 func syncConfig(st Settings) (*store.SyncConfig, error) {
-	u := os.Getenv("LOCAL_KANBAN_TURSO_URL")
+	u := os.Getenv("AGENT_KANBAN_TURSO_URL")
 	if u == "" {
 		return nil, nil
 	}
-	tok := os.Getenv("LOCAL_KANBAN_TURSO_TOKEN")
-	if tok == "" {
-		return nil, errors.New("LOCAL_KANBAN_TURSO_URL is set but LOCAL_KANBAN_TURSO_TOKEN is empty")
+	tok := os.Getenv("AGENT_KANBAN_TURSO_TOKEN")
+	// Turso Cloud always needs a token; a self-hosted `tursodb --sync-server` may run without one.
+	if tok == "" && (strings.HasPrefix(u, "libsql://") || strings.Contains(u, ".turso.io")) {
+		return nil, errors.New("AGENT_KANBAN_TURSO_URL points at Turso Cloud but AGENT_KANBAN_TURSO_TOKEN is empty")
 	}
-	iv := envOr("LOCAL_KANBAN_SYNC_INTERVAL", st.SyncInterval)
+	iv := envOr("AGENT_KANBAN_SYNC_INTERVAL", st.SyncInterval)
 	every, err := time.ParseDuration(iv)
 	if err != nil || every < time.Second {
 		return nil, fmt.Errorf("sync interval must be a duration of at least 1s (e.g. 30s), got %q", iv)
@@ -269,7 +272,7 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func installSkill(args []string) error {
 	if len(args) == 0 || args[0] != "install" {
-		return errors.New("usage: local-kanban skill install [--global] [--dir DIR]")
+		return errors.New("usage: agent-kanban skill install [--global] [--dir DIR]")
 	}
 	fs := flag.NewFlagSet("skill install", flag.ExitOnError)
 	var dirs multiFlag

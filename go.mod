@@ -1,4 +1,4 @@
-module github.com/Rishang/local-kanban
+module github.com/Rishang/agent-kanban
 
 go 1.26.8
 
