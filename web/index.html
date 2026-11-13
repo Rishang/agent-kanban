@@ -13,29 +13,20 @@
 <script src="https://cdn.jsdelivr.net/npm/vue@3.5.45/dist/vue.global.prod.js" integrity="sha384-K2FjvpG1y48yCE+7CBPhnKc16ShPmT3dlNwvoA3dhjV18+L5ugI0P8PWPvdjm/Fa" crossorigin="anonymous"></script>
 <style>
 :root {
-  --bg: #f5f3ef; --panel: #fcfbf8; --col: #edeae4; --card: #fefdfa; --hover: #f1eee8;
-  --text: #1c1a18; --muted: #6e6961; --border: #e3ded6; --accent: #5b5bd6;
-  --accent-soft: #ececfd; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
-  --p-urgent: #e5484d; --p-high: #f76b15; --p-med: #ffb224; --p-low: #8b8d98;
-  --ok: #30a46c; --drop: rgba(91,91,214,.10); --rail: #eae6df; --accent-def: #5b5bd6;
-  --hk: #a626a4; --hs: #50a14f; --hn: #986801; --hc: #a0a1a7; --ht: #4078f2; --hb: #c18401; --hl: #0184bc; --hv: #e45649;
+  color-scheme: light dark;
+  --bg: light-dark(#f5f3ef, #0c0c0b); --panel: light-dark(#fcfbf8, #121211); --col: light-dark(#edeae4, #171716);
+  --card: light-dark(#fefdfa, #1d1c1b); --hover: light-dark(#f1eee8, #252321); --rail: light-dark(#eae6df, #080807);
+  --text: light-dark(#1c1a18, #e1dfda); --muted: light-dark(#6e6961, #88847f); --border: light-dark(#e3ded6, #2c2a28);
+  --accent-def: light-dark(#5b5bd6, #61afef); --accent: var(--accent-def);
+  --accent-soft: light-dark(#ececfd, rgba(97,175,239,.16)); --drop: light-dark(rgba(91,91,214,.10), rgba(97,175,239,.12));
+  --shadow: 0 1px 2px light-dark(rgba(16,24,40,.06), rgba(0,0,0,.6)), 0 1px 3px light-dark(rgba(16,24,40,.08), transparent);
+  --p-urgent: light-dark(#e5484d, #e06c75); --p-high: light-dark(#f76b15, #d19a66); --p-med: light-dark(#ffb224, #e5c07b);
+  --p-low: light-dark(#8b8d98, #5c6370); --ok: light-dark(#30a46c, #98c379);
+  --hk: light-dark(#a626a4, #c678dd); --hs: light-dark(#50a14f, #98c379); --hn: light-dark(#986801, #d19a66); --hc: light-dark(#a0a1a7, #7f848e);
+  --ht: light-dark(#4078f2, #61afef); --hb: light-dark(#c18401, #e5c07b); --hl: light-dark(#0184bc, #56b6c2); --hv: light-dark(#e45649, #e06c75);
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0c0c0b; --panel: #121211; --col: #171716; --card: #1d1c1b; --hover: #252321;
-    --text: #e1dfda; --muted: #88847f; --border: #2c2a28; --accent: #61afef;
-    --accent-soft: rgba(97,175,239,.16); --shadow: 0 1px 2px rgba(0,0,0,.6); --drop: rgba(97,175,239,.12);
-    --p-urgent: #e06c75; --p-high: #d19a66; --p-med: #e5c07b; --p-low: #5c6370; --ok: #98c379; --rail: #080807; --accent-def: #61afef;
-    --hk: #c678dd; --hs: #98c379; --hn: #d19a66; --hc: #7f848e; --ht: #61afef; --hb: #e5c07b; --hl: #56b6c2; --hv: #e06c75;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0c0c0b; --panel: #121211; --col: #171716; --card: #1d1c1b; --hover: #252321;
-  --text: #e1dfda; --muted: #88847f; --border: #2c2a28; --accent: #61afef;
-  --accent-soft: rgba(97,175,239,.16); --shadow: 0 1px 2px rgba(0,0,0,.6); --drop: rgba(97,175,239,.12);
-  --p-urgent: #e06c75; --p-high: #d19a66; --p-med: #e5c07b; --p-low: #5c6370; --ok: #98c379; --rail: #080807; --accent-def: #61afef;
-    --hk: #c678dd; --hs: #98c379; --hn: #d19a66; --hc: #7f848e; --ht: #61afef; --hb: #e5c07b; --hl: #56b6c2; --hv: #e06c75;
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Inter, system-ui, sans-serif; display: flex; overflow: hidden; }
@@ -45,7 +36,6 @@ body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 Int
 .rail button:hover { background: var(--hover); color: var(--text); }
 .rail button.on { background: var(--hover); color: var(--accent); }
 .rail .fill { flex: 1; }
-.rail .avatar { margin: 0; width: 28px; height: 28px; font-size: 11px; }
 main.noside .side { display: none; }
 .avatar svg { width: 62%; height: 62%; }
 /* projects panel */
@@ -69,13 +59,12 @@ main.noside .side { display: none; }
 .pitem:hover .pact, .pitem:focus-within .pact { display: block; }
 .pitem:hover .count, .pitem:focus-within .count { display: none; }
 .pitem .pact:hover { color: var(--text); background: var(--hover); }
-.pitem .pact.del:hover { color: var(--red, #e06c75); }
+.pitem .pact.del:hover { color: var(--p-urgent); }
 #boardName { cursor: text; border-radius: 6px; padding: 1px 4px; }
 #boardName:hover { background: var(--hover); }
 .brand input, .pitem .pn input { width: 100%; font: 600 13px Inter, sans-serif; color: var(--text); background: var(--bg); border: 1px solid var(--accent); border-radius: 6px; padding: 3px 6px; outline: none; }
 .padd { padding: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .padd .inp { max-width: none; }
-.brand { cursor: pointer; border-radius: 8px; padding: 2px 6px 2px 2px; }
 .brand:hover { background: var(--hover); }
 /* command palette */
 .palette { position: fixed; inset: 0; z-index: 25; display: none; align-items: flex-start; justify-content: center; padding-top: 11vh; background: rgba(10,12,16,.38); }
@@ -91,7 +80,6 @@ main.noside .side { display: none; }
 .pres .pid { font: 11.5px 'JetBrains Mono', monospace; color: var(--muted); }
 .pres .pt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pres .pm { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); white-space: nowrap; }
-.pres .pm .avatar { margin: 0; }
 .pres .ps { grid-column: 2 / 4; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pres .ps i { font-style: normal; opacity: .75; }
 mark { background: color-mix(in srgb, var(--p-med) 38%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
@@ -104,9 +92,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Top bar */
 header { display: flex; align-items: center; gap: 10px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.brand { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.brand { font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer; border-radius: 8px; padding: 2px 6px 2px 2px; }
 .brand .logo { width: 24px; height: 24px; display: block; }
-.sync { display: flex; align-items: center; gap: 6px; font: 12px 'JetBrains Mono', monospace; color: var(--muted); background: var(--col); padding: 4px 10px; border-radius: 999px; }
+.sync { display: flex; align-items: center; gap: 6px; font: 12px 'JetBrains Mono', monospace; color: var(--muted); background: var(--col); padding: 4px 10px; border-radius: 999px; max-width: 340px; min-width: 0; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 6px rgba(48,164,108,0); } 0% { box-shadow: 0 0 0 0 rgba(48,164,108,.6); } }
 .spacer { flex: 1; }
@@ -131,7 +119,6 @@ header { display: flex; align-items: center; gap: 10px; padding: 10px 20px; back
 .hrow { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .prop input.toggle { width: 34px; padding: 0; margin: 0; border: 0; background: var(--border); }
 .prop input.toggle:checked { background: var(--accent); }
-.sync { max-width: 340px; min-width: 0; }
 #dbName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hrow small { color: var(--muted); font-size: 12px; }
 .linkrow { display: flex; align-items: center; gap: 4px; }
@@ -164,12 +151,12 @@ main { flex: 1; display: flex; min-height: 0; }
 .card .id { font: 11px 'JetBrains Mono', monospace; color: var(--muted); display: flex; justify-content: space-between; }
 .card .title { font-weight: 500; margin: 4px 0 8px; }
 .meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.meta .avatar { margin-left: auto; }
 .tag { background: color-mix(in srgb, var(--lc, var(--accent)) 18%, transparent); color: var(--lc, var(--accent)); padding: 1px 7px; border-radius: 999px; font-weight: 500; }
 .prio { display: inline-flex; align-items: center; gap: 4px; }
 .prio i { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
-.avatar { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #fff; flex: none; }
+.avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #fff; flex: none; }
 .progress { height: 3px; background: var(--col); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-.progress span { display: block; height: 100%; background: var(--ok); }
 .quick { margin: 0 10px 10px; }
 .quick button { width: 100%; padding: 7px 10px; border: 0; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; text-align: left; }
 .quick button:hover { background: var(--hover); color: var(--text); }
@@ -184,7 +171,6 @@ main { flex: 1; display: flex; min-height: 0; }
 .pane.on { display: block; }
 .feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 .feed li { display: flex; gap: 10px; font-size: 13px; }
-.feed .avatar { margin: 0; }
 .feed small { display: block; color: var(--muted); font-size: 11px; }
 .seg.feedmode { display: flex; width: 100%; margin-bottom: 14px; padding: 3px; border-radius: 9px; background: var(--bg); }
 .seg.feedmode button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; font-size: 12.5px; border-radius: 6px; }
@@ -208,16 +194,14 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .mcp h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .mcp .tool { font: 12px 'JetBrains Mono', monospace; padding: 6px 8px; background: var(--col); border-radius: 6px; margin-bottom: 6px; }
 .mcp .agent { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
-.mcp .agent .avatar { margin: 0; }
 .mcp .agent span:last-child { margin-left: auto; font-size: 11px; color: var(--ok); }
 
 /* Task drawer: wide reading view, content left / properties right */
 .scrim { position: fixed; inset: 0; background: rgba(10,12,16,.3); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 9; }
 .scrim.show { opacity: 1; pointer-events: auto; }
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(880px, 100vw); background: var(--panel); border-left: 1px solid var(--border);
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(880px, 100vw); max-width: 100vw; background: var(--panel); border-left: 1px solid var(--border);
   box-shadow: -12px 0 40px rgba(0,0,0,.22); transform: translateX(100%); transition: transform .22s ease, width .22s ease; z-index: 10; display: flex; flex-direction: column; }
 .drawer.open { transform: none; }
-.drawer { max-width: 100vw; }
 .drawer.resizing { transition: none; user-select: none; }
 .resize { position: absolute; left: -5px; top: 0; bottom: 0; width: 10px; cursor: ew-resize; z-index: 2; touch-action: none; }
 .resize::after { content: ''; position: absolute; left: 4px; top: 50%; width: 3px; height: 44px; margin-top: -22px; border-radius: 3px; background: var(--border); transition: background .15s, height .15s, margin .15s; }
@@ -258,7 +242,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .md li { margin: .25em 0; }
 .md li:has(> input[type=checkbox]) { list-style: none; margin-left: -1.3em; }
 .md input[type=checkbox] { accent-color: var(--accent); margin-right: 6px; }
-.md code { font-size: .86em; padding: 1px 5px; }
+.md code { font-size: .86em; }
 .md :not(pre) > code { background: var(--col); border: 1px solid var(--border); border-radius: 5px; padding: .5px 5px; white-space: break-spaces; }
 /* comments: narrower column, so tighter type than descriptions */
 .comment .md { font-size: 14px; line-height: 1.55; }
@@ -269,7 +253,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .md pre { background: var(--col); padding: 12px 14px; border-radius: 8px; overflow-x: auto; border: 1px solid var(--border); }
 .md pre code { background: none; padding: 0; font-size: 13px; line-height: 1.6; tab-size: 4; }
 /* highlight.js tokens */
-.hljs-keyword, .hljs-selector-tag, .hljs-doctag, .hljs-section { color: var(--hk); }
+.hljs-keyword, .hljs-selector-tag, .hljs-doctag { color: var(--hk); }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta .hljs-string { color: var(--hs); }
 .hljs-number, .hljs-attr, .hljs-selector-attr, .hljs-selector-class { color: var(--hn); }
 .hljs-comment, .hljs-quote { color: var(--hc); font-style: italic; }
@@ -299,7 +283,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .check .icon-btn { margin-left: auto; visibility: hidden; }
 .check:hover .icon-btn { visibility: visible; }
 .bar { height: 4px; background: var(--col); border-radius: 2px; overflow: hidden; flex: 1; max-width: 160px; }
-.bar span { display: block; height: 100%; background: var(--ok); }
+.progress span, .bar span { display: block; height: 100%; background: var(--ok); }
 .add-line { width: 100%; border: 0; background: none; padding: 6px 0; outline: none; color: var(--muted); font-size: 14px; }
 .add-line:focus { color: var(--text); }
 .comment { display: flex; gap: 12px; margin-bottom: 14px; }
@@ -312,12 +296,6 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .compose textarea { width: 100%; min-height: 76px; background: var(--col); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; outline: none; resize: vertical; line-height: 1.5; }
 .compose textarea:focus { border-color: var(--accent); background: var(--panel); }
 .compose .row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
-@media (max-width: 760px) {
-  .d-body { grid-template-columns: 1fr; }
-  .d-side { order: -1; border-left: 0; border-bottom: 1px solid var(--border); }
-  .props { display: grid; grid-template-columns: 1fr 1fr; }
-  .d-main { padding: 20px 18px 40px; }
-}
 .d-foot { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); }
 .danger { color: var(--p-urgent); }
 
@@ -341,7 +319,6 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .row-i input[type=color] { width: 26px; height: 26px; border: 0; padding: 0; background: none; cursor: pointer; flex: none; }
 .row-i .grow { flex: 1; min-width: 0; max-width: none; }
 .row-i .num { width: 76px; flex: none; }
-.row-i .avatar { margin: 0; }
 .row-i .muted { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .icon-btn:disabled { opacity: .3; cursor: not-allowed; }
 .snippet { position: relative; margin-bottom: 14px; }
@@ -367,6 +344,10 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .toggle:checked { background: var(--accent); }
 .toggle:checked::after { transform: translateX(14px); }
 @media (max-width: 760px) {
+  .d-body { grid-template-columns: 1fr; }
+  .d-side { order: -1; border-left: 0; border-bottom: 1px solid var(--border); }
+  .props { display: grid; grid-template-columns: 1fr 1fr; }
+  .d-main { padding: 20px 18px 40px; }
   .s-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .s-nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 8px; }
   .s-main { padding: 20px 16px 60px; }
@@ -422,7 +403,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
             <span class="pid" v-html="hl(it.hit.id, words)"></span>
             <span class="pt">{{ it.hit.human ? '👤 ' : '' }}<span v-html="hl(it.hit.title, words)"></span></span>
             <span class="pm"><span class="tag" :style="{ '--lc': projColor(it.hit.project) }">{{ it.hit.projectName }}</span><span>{{ it.hit.columnName }}</span>
-              <span class="prio"><i :style="{ background: PRIO_COLOR[it.hit.priority] }"></i></span><span v-if="it.hit.assignee" style="display:contents" v-html="av(it.hit.assignee)"></span></span>
+              <span class="prio"><i :style="{ background: PRIO_COLOR[it.hit.priority] }"></i></span><avatar v-if="it.hit.assignee" :who="it.hit.assignee" /></span>
             <span v-if="it.hit.snippet" class="ps"><i>{{ it.hit.where }}:</i> <span v-html="hl(it.hit.snippet, words)"></span></span>
           </template>
         </div>
@@ -434,20 +415,26 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
   </div>
 </script>
 <div class="app">
-<header>
-  <div class="brand"><img class="logo" src="logo.svg" alt=""><span id="boardName">Local Kanban</span></div>
-  <div class="sync" title="Turso database file · live updates"><span class="dot off" id="dot"></span><span id="dbName">kanban.db</span> · <span id="synced">connecting…</span></div>
+<header></header>
+<script type="text/x-template" id="tpl-header">
+  <div class="brand" @click="toggleProjects()"><img class="logo" src="logo.svg" alt="">
+    <input v-if="renaming" ref="nameEl" v-model="newName" maxlength="64" aria-label="Project name"
+      @click.stop @keydown.stop @keydown.enter="saveName" @keydown.esc="renaming = false" @blur="saveName">
+    <span v-else id="boardName" title="Rename project" @click.stop="startRename">{{ S.B.settings.board || 'Local Kanban' }}</span></div>
+  <div class="sync" :title="syncTitle"><span class="dot" :class="{ off: !S.online }" id="dot"></span><span id="dbName">{{ dbName }}</span> · <span id="synced">{{ status }}</span></div>
   <div class="spacer"></div>
-  <input class="search" id="q" placeholder="Filter this board…  (f)" aria-label="Filter this board">
-  <select class="ctl" id="sort" aria-label="Sort">
+  <input class="search" id="q" v-model="S.q" placeholder="Filter this board…  (f)" aria-label="Filter this board"
+    @keydown.enter.prevent="$event.target.blur()" @keydown.esc.stop="S.q = ''; $event.target.blur()">
+  <select class="ctl" id="sort" v-model="S.sort" aria-label="Sort">
     <option value="order">Sort: manual</option>
     <option value="priority">Sort: priority</option>
     <option value="due">Sort: due date</option>
     <option value="updated">Sort: recently updated</option>
   </select>
-  <select class="ctl" id="who" aria-label="Filter by assignee"><option value="">All assignees</option></select>
-  <button class="btn" id="new">+ New task</button>
-</header>
+  <select class="ctl" id="who" v-model="S.who" aria-label="Filter by assignee">
+    <option value="">All assignees</option><option v-for="m in S.B.members" :key="m.name">{{ m.name }}</option></select>
+  <button class="btn" id="new" @click="newTask">+ New task</button>
+</script>
 
 <main>
   <section class="board" id="board"></section>
@@ -461,16 +448,16 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
       <article v-for="t in lists[c.id]" :key="t.id" class="card" :data-id="t.id" tabindex="0" draggable="true"
         :class="{ sel: t.id === S.openId, dragging: t.id === dragId, flash: t.id === S.flashId }"
         @dragstart="dragId = t.id" @dragend="dragId = overCol = null">
-        <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="P[t.assignee]?.agent" title="Agent-managed">⚡ agent</span></div>
+        <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="member(t.assignee)?.agent" title="Agent-managed">⚡ agent</span></div>
         <div class="title">{{ t.title }}</div>
         <div class="meta">
           <span class="prio"><i :style="{ background: PRIO_COLOR[t.priority] }"></i>{{ t.priority }}</span>
-          <span v-for="l in t.labels" :key="l" class="tag" :style="L[l] ? { '--lc': L[l] } : null">{{ l }}</span>
+          <span v-for="l in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}</span>
           <span v-if="t.due" :style="overdue(t) ? 'color:var(--p-urgent)' : ''">📅 {{ t.due.slice(5) }}</span>
           <span v-if="t.checklist.length">☑ {{ done(t) }}/{{ t.checklist.length }}</span>
           <span v-if="t.comments.length">💬 {{ t.comments.length }}</span>
           <span v-if="t.link" title="Has a link">🔗</span>
-          <span v-if="t.assignee" style="display:contents" v-html="av(t.assignee)"></span>
+          <avatar v-if="t.assignee" :who="t.assignee" />
         </div>
         <div v-if="t.checklist.length" class="progress"><span :style="{ width: done(t) / t.checklist.length * 100 + '%' }"></span></div>
       </article>
@@ -493,21 +480,21 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
     <ul class="feed">
       <template v-if="mode === 'time'">
         <li v-for="(e, i) in S.B.events" :key="i" :class="{ link: openable(e.taskId) }" :data-open="openable(e.taskId) ? e.taskId : null">
-          <span style="display:contents" v-html="av(e.who)"></span><div><b>{{ e.who }}</b> {{ e.action }} <code v-if="e.taskId">{{ e.taskId }}</code> {{ e.detail }}<small>{{ since(e.t) }} · via {{ e.via }}</small></div></li>
+          <avatar :who="e.who" /><div><b>{{ e.who }}</b> {{ e.action }} <code v-if="e.taskId">{{ e.taskId }}</code> {{ e.detail }}<small>{{ since(e.t) }} · via {{ e.via }}</small></div></li>
       </template>
       <template v-else>
         <li v-for="g in groups" :key="g.key" class="tgroup" :class="{ closed: collapsed.has(g.key) }">
           <div class="tg-head"><button class="caret" aria-label="Collapse" @click.stop="toggle(g.key)">▾</button>
             <code v-if="g.id">{{ g.id }}</code><span class="tt" :data-open="g.task ? g.id : null" :title="g.title">{{ g.title }}</span>
             <small>{{ g.count }} · {{ since(g.t) }}</small></div>
-          <div class="tg-kids"><div v-for="(r, i) in g.rows" :key="i" class="row"><span style="display:contents" v-html="av(r.who)"></span>
+          <div class="tg-kids"><div v-for="(r, i) in g.rows" :key="i" class="row"><avatar :who="r.who" />
             <div><b>{{ r.who }}</b> {{ r.action }} {{ r.detail }}<span v-if="r.n > 1" class="x">×{{ r.n }}</span><small>{{ since(r.t) }} · via {{ r.via }}</small></div></div></div></li>
       </template>
       <li v-if="!S.B.events.length" class="ph">No activity yet.</li>
     </ul></div>
   <div class="pane mcp" :class="{ on: tab === 'mcp' }">
     <h4>Connected agents</h4>
-    <div v-for="m in live" :key="m.name" class="agent"><span style="display:contents" v-html="av(m.name)"></span><span>{{ m.name }}</span>
+    <div v-for="m in live" :key="m.name" class="agent"><avatar :who="m.name" /><span>{{ m.name }}</span>
       <span class="st on" :title="'Last call ' + since(S.B.seen[m.name])" role="img" aria-label="connected"></span></div>
     <p v-if="!live.length" class="ph">No agent connected in the last 5 minutes. Setup: Settings → MCP &amp; skill.</p>
     <h4 style="margin-top:16px">Exposed tools</h4>
@@ -553,8 +540,8 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
         <input class="add-line" v-model="ckText" placeholder="+ Add item" @keydown.enter="addCheck" @keydown.esc.stop="ckText = ''; $event.target.blur()"></div>
 
       <div class="d-sec"><h4>Comments · {{ t.comments.length }}</h4>
-        <div v-for="c in t.comments" :key="c.id" class="comment"><span v-html="av(c.who)"></span><div class="bubble">
-          <div class="who"><b>{{ c.who }}</b> <span v-if="P[c.who]?.agent" class="tag">agent</span><small>{{ ago(c.t) }}</small></div>
+        <div v-for="c in t.comments" :key="c.id" class="comment"><avatar :who="c.who" /><div class="bubble">
+          <div class="who"><b>{{ c.who }}</b> <span v-if="member(c.who)?.agent" class="tag">agent</span><small>{{ ago(c.t) }}</small></div>
           <div class="md" v-md="c.text"></div></div></div>
         <p v-if="!t.comments.length" class="ph" style="margin:0 0 8px">No comments yet.</p>
         <div class="compose"><textarea v-model="cmText" placeholder="Write a comment… (markdown supported)"
@@ -575,7 +562,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
         <a v-if="/^https?:\/\//i.test(t.link || '')" :href="t.link" target="_blank" rel="noopener noreferrer" title="Open link">↗</a></div></div>
       <label class="prop"><span>Human</span><div class="hrow"><input type="checkbox" class="toggle" :checked="t.human" @change="setHuman($event.target.checked)"><small>Agents skip it</small></div></label>
       <div class="prop"><span>Labels</span><div class="chips">
-        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="L[l] ? { '--lc': L[l] } : null">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: t.labels.filter((_, j) => j !== i) })">×</button></span>
+        <span v-for="(l, i) in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}<button :aria-label="'Remove ' + l" @click="patch({ labels: without(t.labels, i) })">×</button></span>
         <input v-model="labelText" list="labelOpts" placeholder="+ label" @keydown.enter.prevent="addLabel" @keydown.esc.stop="labelText.trim() ? addLabel() : $event.target.blur()">
         <datalist id="labelOpts"><option v-for="l in freeLabels" :key="l" :value="l"></option></datalist></div></div>
     </div></div>
@@ -636,7 +623,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
       </section>
 
       <section class="s-sec" id="s-members"><h3>Members &amp; agents</h3><p>Shared by every project. Agents identify themselves with <code>?agent=name</code> on the MCP URL; unknown names join automatically as agents.</p>
-        <div class="list"><div v-for="(m, i) in f.members" :key="m.name" class="row-i"><span style="display:contents" v-html="av(m.name)"></span>
+        <div class="list"><div v-for="(m, i) in f.members" :key="m.name" class="row-i"><avatar :who="m.name" />
           <b class="grow">{{ m.name }}</b><span v-if="m.name === ME()" class="muted">you</span>
           <input type="color" v-model="m.color" aria-label="Color" @input="saveMembers">
           <select class="inp" style="width:110px;flex:none" :value="iconOf(m.name, m)" aria-label="Icon" @change="m.icon = $event.target.value; saveMembers()">
@@ -682,11 +669,12 @@ if (!window.Vue || !window.marked || !window.DOMPurify) {
   throw new Error('UI libraries failed to load');
 }
 // ---------- State (from GET /api/board, refreshed on every SSE event) ----------
-let B = { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' };
-const P = {}, L = {};               // member name → member (+short), label → color
-// Reactive state read by the Vue parts of the UI (drawer). The rest of the page still renders by hand.
-const S = Vue.reactive({ B, openId: null, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
+// All UI state. S.B is the board from GET /api/board, replaced on every SSE event.
+const S = Vue.reactive({ B: { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' }, openId: null, online: null, palOpen: false, projOpen: false, settingsOpen: false, sidePanel: true, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
   projects: [], proj: null, pal: { q: '', n: 0 }, settingsN: 0 });
+const members = Vue.computed(() => Object.fromEntries(S.B.members.map(m => [m.name, m])));
+const labels = Vue.computed(() => Object.fromEntries(S.B.labels.map(l => [l.name, l.color])));
+const member = name => members.value[name], labelColor = name => labels.value[name];
 const PRIO = { urgent: 0, high: 1, medium: 2, low: 3 };
 const PRIO_COLOR = { urgent: 'var(--p-urgent)', high: 'var(--p-high)', medium: 'var(--p-med)', low: 'var(--p-low)' };
 // One family (Tailwind 500s): equal weight, readable as text on dark and as button fill with white text.
@@ -697,10 +685,10 @@ const PERMS = { create: 'Create tasks', edit: 'Edit fields & checklists', move: 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${s / 60 | 0}m ago` : s < 86400 ? `${s / 3600 | 0}h ago` : `${s / 86400 | 0}d ago`; };
-const byId = id => B.tasks.find(t => t.id === id);
-const colName = id => B.columns.find(c => c.id === id)?.name ?? id;
-const lastCol = () => B.columns.at(-1)?.id;
-const ME = () => B.settings.me;
+const byId = id => S.B.tasks.find(t => t.id === id);
+const colName = id => S.B.columns.find(c => c.id === id)?.name ?? id;
+const lastCol = () => S.B.columns.at(-1)?.id;
+const ME = () => S.B.settings.me;
 const randColor = () => '#' + (Math.random() * 0xffffff | 0).toString(16).padStart(6, '0');
 // Generic glyphs (not brand logos) for members; Member.icon overrides the name-based default.
 const GLYPH = {
@@ -716,19 +704,31 @@ const GLYPH = {
 };
 const AUTO_ICON = { claude: 'claude', codex: 'codex', pi: 'pi', opencode: 'opencode', gemini: 'gemini', cursor: 'cursor', copilot: 'copilot' };
 const iconOf = (name, m) => (m?.icon && GLYPH[m.icon] ? m.icon : AUTO_ICON[name]) || (m?.agent ? 'bot' : 'user');
-const av = who => { const p = P[who] || { color: '#7f848e' };
-  return `<span class="avatar" style="background:${esc(p.color)}" title="${esc(who)}"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPH[iconOf(who, P[who])]}</svg></span>`; };
-const tag = (l, extra = '') => `<span class="tag" ${L[l] ? `style="--lc:${esc(L[l])}"` : ''}>${esc(l)}${extra}</span>`;
-const archived = t => B.settings.archiveDays > 0 && t.column === lastCol() && Date.now() - t.updated > B.settings.archiveDays * 864e5;
+const archived = t => S.B.settings.archiveDays > 0 && t.column === lastCol() && Date.now() - t.updated > S.B.settings.archiveDays * 864e5;
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
+const clone = x => JSON.parse(JSON.stringify(x));
+const without = (a, i) => a.filter((_, k) => k !== i);
+const doneCount = t => t?.checklist.filter(c => c.done).length ?? 0;
+const readHash = () => decodeURIComponent(location.hash.slice(1));
+const hashOf = (...parts) => '#' + parts.map(encodeURIComponent).join('/');
+const setHash = (...parts) => { if (readHash() !== parts.join('/')) history.pushState(null, '', hashOf(...parts)); };
+const loadScript = (src, integrity) => new Promise((onload, onerror) =>
+  document.head.append(Object.assign(document.createElement('script'), { src, integrity, crossOrigin: 'anonymous', onload, onerror })));
 
 function toast(msg) {
   const el = $('#toast'); el.textContent = msg; el.classList.add('show');
   clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 5000);
 }
 
+// ---------- Panels: open/closed state lives in S; this is the only place that sets their classes ----------
+Vue.watchEffect(() => {
+  const on = (sel, cls, v) => $(sel).classList.toggle(cls, !!v);
+  on('#projects', 'open', S.projOpen); on('#rProjects', 'on', S.projOpen); on('#palette', 'open', S.palOpen);
+  on('#drawer', 'open', S.openId); on('#settings', 'open', S.settingsOpen); on('#scrim', 'show', S.openId || S.settingsOpen);
+  on('main', 'noside', !S.sidePanel); on('#rPanel', 'on', S.sidePanel);
+});
+
 // ---------- Server ----------
-let PROJ = null, PROJECTS = [];
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   const j = await r.json().catch(() => ({}));
@@ -736,93 +736,108 @@ async function post(url, body) {
   return j;
 }
 async function api(op, body) {
-  const r = await fetch('/api/p/' + encodeURIComponent(PROJ) + '/' + op, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) { toast(j.error || r.statusText); throw new Error(j.error || r.statusText); }
+  const j = await post('/api/p/' + encodeURIComponent(S.proj) + '/' + op, body);
   S.saved = 'Saved · ' + new Date().toLocaleTimeString();
   return j;
 }
+// Run an op, then reload the board whether it worked or not (a failure already showed a toast).
+const save = (op, body) => api(op, body).catch(() => {}).then(load);
 
 let reqSeq = 0, applied = 0, flashEv = null, routed = false;
 async function load() {
   const my = ++reqSeq;
-  const r = await fetch('/api/p/' + encodeURIComponent(PROJ) + '/board');
+  const r = await fetch('/api/p/' + encodeURIComponent(S.proj) + '/board');
   const b = await r.json();
   if (my < applied) return; // a newer response already landed
-  if (!r.ok) { toast(b.error || 'Project not found'); const other = PROJECTS.find(p => p.id !== PROJ); return other && switchProject(other.id); }
-  applied = my; B = Vue.reactive(b); // reactive: edits anywhere (e.g. settings) redraw the Vue parts
-  for (const k in P) delete P[k];
-  for (const k in L) delete L[k];
-  B.members.forEach(m => P[m.name] = { ...m, short: m.name.slice(0, 2).toUpperCase() });
-  B.labels.forEach(l => L[l.name] = l.color);
-  S.B = B;
-  renderAll();
+  if (!r.ok) { toast(b.error || 'Project not found'); const other = S.projects.find(p => p.id !== S.proj); return other && switchProject(other.id); }
+  applied = my; S.B = b;
+  afterLoad();
 }
 
 // ---------- Projects ----------
 const projColor = id => { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h} 50% 50%)`; };
 async function loadProjects() {
   const r = await (await fetch('/api/projects')).json();
-  PROJECTS = S.projects = r.projects || [];
+  S.projects = r.projects || [];
 }
 let lpT; const loadProjectsSoon = () => { clearTimeout(lpT); lpT = setTimeout(loadProjects, 400); };
 async function boot() {
   await loadProjects();
-  const [hp] = decodeURIComponent(location.hash.slice(1)).split('/');
-  PROJ = S.proj = [hp, PROJ, store.get('kanban:project')].find(id => id && PROJECTS.some(p => p.id === id)) || PROJECTS[0]?.id;
-  if (!PROJ) return toast('No projects yet: add one from the folder icon');
-  store.set('kanban:project', PROJ);
+  const [hp] = readHash().split('/');
+  S.proj = [hp, S.proj, store.get('kanban:project')].find(id => id && S.projects.some(p => p.id === id)) || S.projects[0]?.id;
+  if (!S.proj) return toast('No projects yet: add one from the folder icon');
+  store.set('kanban:project', S.proj);
   await load();
   if (!routed) { routed = true; route(); }
 }
 async function switchProject(pid, fromRoute) {
-  if (!pid || !PROJECTS.some(p => p.id === pid)) return;
-  if (openId) closeTask();
-  PROJ = S.proj = pid; store.set('kanban:project', pid);
-  $('#q').value = S.q = '';
+  if (!pid || !S.projects.some(p => p.id === pid)) return;
+  if (S.openId) closeTask();
+  S.proj = pid; store.set('kanban:project', pid);
+  S.q = '';
   await load();
-  if (!fromRoute && decodeURIComponent(location.hash.slice(1)) !== pid) history.pushState(null, '', '#' + encodeURIComponent(pid));
+  if (!fromRoute) setHash(pid);
 }
-const projPanel = $('#projects');
-function toggleProjects(on = !projPanel.classList.contains('open')) {
-  projPanel.classList.toggle('open', on); $('#rProjects').classList.toggle('on', on);
-  store.set('kanban:projects', on ? '1' : null);
-}
+function toggleProjects(on = !S.projOpen) { S.projOpen = on; store.set('kanban:projects', on ? '1' : null); }
 toggleProjects(store.get('kanban:projects') === '1');
 $('#rProjects').onclick = () => toggleProjects();
 $('#rBoard').onclick = () => { closeTask(); closeSettings(); };
-$('.brand').onclick = () => toggleProjects();
-// Header rename: Enter or blur saves, Esc cancels. The id (URLs, MCP ?project=) never changes.
-function renameProject(pid, el) {
-  const p = PROJECTS.find(x => x.id === pid); if (!p || !el) return;
-  const inp = document.createElement('input');
-  inp.value = p.name; inp.maxLength = 64; inp.setAttribute('aria-label', 'Project name');
-  el.replaceWith(inp); inp.focus(); inp.select();
-  let done = false;
-  const finish = async save => {
-    if (done) return; done = true;
-    const name = inp.value.trim();
-    inp.replaceWith(el);
-    if (save && name && name !== p.name) {
-      el.textContent = name;
-      await post('/api/projects/rename', { id: p.id, name }).catch(() => { el.textContent = p.name; });
-    }
-    loadProjects();
-  };
-  inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
-  inp.onclick = e => e.stopPropagation();
-  inp.onblur = () => finish(true);
+// Rename from the header or the projects panel. The id (URLs, MCP ?project=) never changes.
+async function renameProject(p, name) {
+  name = name.trim();
+  if (p && name && name !== p.name) {
+    const old = p.name, show = n => { p.name = n; if (p.id === S.proj) S.B.settings.board = n; };
+    show(name);
+    await post('/api/projects/rename', { id: p.id, name }).catch(() => show(old));
+  }
+  loadProjects();
 }
 async function deleteProject(pid) {
-  const p = PROJECTS.find(x => x.id === pid); if (!p) return;
-  if (PROJECTS.length <= 1) return toast("Can't delete the last project");
+  const p = S.projects.find(x => x.id === pid); if (!p) return;
+  if (S.projects.length <= 1) return toast("Can't delete the last project");
   if (prompt(`Type “${p.name}” to delete this project and all ${p.total} of its tasks`) !== p.name) return;
   if (!await post('/api/projects/remove', { id: pid }).then(() => true, () => false)) return;
   await loadProjects();
-  if (pid === PROJ) switchProject(PROJECTS[0]?.id);
+  if (pid === S.proj) switchProject(S.projects[0]?.id);
 }
-$('#boardName').onclick = e => { e.stopPropagation(); renameProject(PROJ, $('#boardName')); };
-$('#boardName').title = 'Rename project';
+
+// ---------- Shared by every Vue app: template globals, <avatar>, v-md ----------
+const Avatar = {
+  props: { who: String },
+  computed: { m() { return member(this.who); }, glyph() { return GLYPH[iconOf(this.who, this.m)]; } },
+  template: `<span class="avatar" :style="{ background: m?.color || '#7f848e' }" :title="who"><svg viewBox="0 0 24 24" fill="none" stroke="#fff"
+    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="glyph"></svg></span>`,
+};
+// v-md: sanitized markdown + mermaid/svg/highlight, re-rendered only when the text changes (rethemeMd: theme).
+const vMd = {
+  mounted(el, b) { el._md = b.value; renderMd(el, b.value); },
+  updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
+};
+const shared = { install(app) {
+  Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without });
+  app.component('avatar', Avatar).directive('md', vMd);
+} };
+
+// ---------- Header (Vue): project name (click to rename), live status, board filters ----------
+Vue.createApp({
+  template: '#tpl-header',
+  setup() {
+    const renaming = Vue.ref(false), newName = Vue.ref(''), nameEl = Vue.ref(null);
+    const current = () => S.projects.find(p => p.id === S.proj);
+    async function startRename() {
+      const p = current(); if (!p) return;
+      newName.value = p.name; renaming.value = true; await Vue.nextTick(); nameEl.value?.focus(); nameEl.value?.select();
+    }
+    function saveName() { if (!renaming.value) return; renaming.value = false; renameProject(current(), newName.value); } // Enter then blur: once
+    const dbName = Vue.computed(() => S.B.db.split(/[\\/]/).pop() || 'kanban.db');
+    const status = Vue.computed(() => S.online == null ? 'connecting…' : !S.online ? 'offline · reconnecting…'
+      : !S.B.sync ? 'live' : S.B.sync.error ? 'live · cloud sync failing' : 'live · synced');
+    const syncTitle = Vue.computed(() => S.B.db + (!S.B.sync ? ' · live updates' : ` · sync ${S.B.sync.remote}` +
+      (S.B.sync.error ? ` · last error: ${S.B.sync.error}` : S.B.sync.lastPull ? ` · synced ${ago(S.B.sync.lastPull)}` : '')));
+    return { renaming, newName, nameEl, dbName, status, syncTitle, startRename, saveName, toggleProjects, newTask };
+  },
+}).use(shared).mount('header');
+Vue.watchEffect(() => document.title = S.B.settings.board || 'Local Kanban');
 Vue.createApp({
   template: '#tpl-projects',
   setup() {
@@ -831,12 +846,9 @@ Vue.createApp({
       renaming.value = p.id; newName.value = p.name; await Vue.nextTick();
       const el = [].concat(renameEl.value)[0]; el?.focus(); el?.select();
     }
-    async function saveRename(p) {
+    function saveRename(p) {
       if (renaming.value !== p.id) return; // Enter then blur: save once
-      renaming.value = null;
-      const v = newName.value.trim();
-      if (v && v !== p.name) { p.name = v; await post('/api/projects/rename', { id: p.id, name: v }).catch(() => {}); }
-      loadProjects();
+      renaming.value = null; renameProject(p, newName.value);
     }
     async function add() {
       if (!name.value.trim()) return nameEl.value?.focus();
@@ -844,15 +856,15 @@ Vue.createApp({
       name.value = dir.value = '';
       await loadProjects(); switchProject(p.id);
     }
-    return { S, renaming, newName, name, dir, renameEl, nameEl, projColor, toggleProjects, switchProject, deleteProject, startRename, saveRename, add };
+    return { renaming, newName, name, dir, renameEl, nameEl, toggleProjects, switchProject, deleteProject, startRename, saveRename, add };
   },
-}).mount('#projApp');
+}).use(shared).mount('#projApp');
 
 // ---------- Command palette: search every project ----------
 const pal = $('#palette');
 const FILTERS = ['is:open', 'is:done', 'is:human', 'is:agent', 'is:overdue', '@', 'label:', 'col:', 'prio:', 'project:'];
-function openPalette(q = '') { pal.classList.add('open'); S.pal.q = q; S.pal.n++; }
-function closePalette() { pal.classList.remove('open'); if (pal.contains(document.activeElement)) document.activeElement.blur(); } // else shortcuts land in the hidden input
+function openPalette(q = '') { S.palOpen = true; S.pal.q = q; S.pal.n++; }
+function closePalette() { S.palOpen = false; if (pal.contains(document.activeElement)) document.activeElement.blur(); } // else shortcuts land in the hidden input
 const hl = (text, words) => {
   if (!words.length) return esc(text);
   const re = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
@@ -882,7 +894,7 @@ Vue.createApp({
       const it = items.value[i]; if (!it) return;
       closePalette();
       if (it.project) return switchProject(it.project.id);
-      if (it.hit.project !== PROJ) await switchProject(it.hit.project);
+      if (it.hit.project !== S.proj) await switchProject(it.hit.project);
       openTask(it.hit.id);
     }
     function onKey(e) {
@@ -895,25 +907,20 @@ Vue.createApp({
       q.value = (q.value.trim() + ' ' + f).trim() + (f.endsWith(':') || f === '@' ? '' : ' ');
       inEl.value?.focus(); search();
     }
-    return { q, items, sel, words, inEl, resEl, FILTERS, PRIO_COLOR, hl, av, projColor, group, soon, choose, onKey, insert };
+    return { q, items, sel, words, inEl, resEl, FILTERS, hl, group, soon, choose, onKey, insert };
   },
-}).mount('#palApp');
+}).use(shared).mount('#palApp');
 pal.onclick = e => { if (e.target === pal) closePalette(); };
-
-function setLive(on) {
-  $('#dot').classList.toggle('off', !on);
-  $('#synced').textContent = !on ? 'offline · reconnecting…' : !B.sync ? 'live' : B.sync.error ? 'live · cloud sync failing' : 'live · synced';
-}
 
 function connect() {
   const es = new EventSource('/api/events');
-  es.onopen = () => { setLive(true); boot(); };
+  es.onopen = () => { S.online = true; boot(); };
   es.onmessage = e => {
     const m = JSON.parse(e.data);
-    if (m.project === PROJ || m.via === 'sync') { flashEv = m; load(); }
+    if (m.project === S.proj || m.via === 'sync') { flashEv = m; load(); }
     loadProjectsSoon(); // counts / list
   };
-  es.onerror = () => setLive(false); // EventSource reconnects by itself
+  es.onerror = () => S.online = false; // EventSource reconnects by itself
 }
 
 // debounced saves keyed by field; flush() forces a pending save now
@@ -922,21 +929,16 @@ function later(key, fn, ms = 500) { clearTimeout(pending[key]?.t); pending[key] 
 function flush(key) { const p = pending[key]; if (p) { clearTimeout(p.t); delete pending[key]; p.fn(); } }
 const typingIn = el => el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
 
-function renderAll() {
-  $('#boardName').textContent = B.settings.board;
-  document.title = B.settings.board;
-  $('#dbName').textContent = B.db.split(/[\\/]/).pop();
-  setLive(true);
-  $('.sync').title = B.db + (!B.sync ? ' · live updates' : ` · sync ${B.sync.remote}` +
-    (B.sync.error ? ` · last error: ${B.sync.error}` : B.sync.lastPull ? ` · synced ${ago(B.sync.lastPull)}` : ''));
-  fillWho();
-  if (openId) {
-    if (!byId(openId)) { toast(`${openId} was deleted`); closeTask(); }
+function afterLoad() {
+  S.online = true;
+  if (S.who && !member(S.who)) S.who = ''; // assignee filter on a removed member
+  if (S.openId) {
+    if (!byId(S.openId)) { toast(`${S.openId} was deleted`); closeTask(); }
   }
   if (flashEv?.taskId) {
     const ev = flashEv;
     if (ev.via === 'mcp') { S.flashId = ev.taskId; setTimeout(() => S.flashId === ev.taskId && (S.flashId = null), 1400); }
-    if (ev.via === 'mcp' && ev.taskId === openId) { S.live = true; setTimeout(() => S.live = false, 2500); }
+    if (ev.via === 'mcp' && ev.taskId === S.openId) { S.live = true; setTimeout(() => S.live = false, 2500); }
   }
   flashEv = null;
 }
@@ -948,12 +950,6 @@ function sorted(list) {
     k === 'priority' ? PRIO[a.priority] - PRIO[b.priority] :
     k === 'due' ? (a.due || '9').localeCompare(b.due || '9') :
     k === 'updated' ? b.updated - a.updated : a.pos - b.pos);
-}
-
-function fillWho() {
-  const sel = $('#who'), v = sel.value;
-  sel.innerHTML = '<option value="">All assignees</option>' + B.members.map(m => `<option>${esc(m.name)}</option>`).join('');
-  sel.value = P[v] ? v : ''; S.who = sel.value;
 }
 
 // ---------- Side panel (Vue): Activity timeline or by-task tree, connected agents, tools ----------
@@ -994,9 +990,9 @@ Vue.createApp({
           title: k ? (task ? task.title : (evs.find(e => e.detail && /created|deleted/.test(e.action))?.detail || 'deleted task')) : 'Board' };
       });
     });
-    return { S, TOOLS, tab, mode, collapsed, live, groups, since, setMode, toggle, openable, av };
+    return { TOOLS, tab, mode, collapsed, live, groups, since, setMode, toggle, openable };
   },
-}).mount('#sideApp');
+}).use(shared).mount('#sideApp');
 
 // ---------- Board (Vue) ----------
 Vue.createApp({
@@ -1012,7 +1008,6 @@ Vue.createApp({
     const lists = Vue.computed(() => Object.fromEntries(S.B.columns.map(c => [c.id, sorted(visible.value.filter(t => t.column === c.id))])));
     const totals = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) if (!archived(t)) n[t.column] = (n[t.column] || 0) + 1; return n; });
     const total = col => totals.value[col] || 0;
-    const done = t => t.checklist.filter(c => c.done).length;
     const overdue = t => t.due && t.column !== lastCol() && t.due < new Date().toISOString().slice(0, 10);
     function onOver(e, col) { if (!dragId.value) return; e.preventDefault(); overCol.value = col; }
     async function onDrop(e, col) {
@@ -1021,7 +1016,7 @@ Vue.createApp({
       const id = dragId.value; dragId.value = overCol.value = null;
       const after = [...e.currentTarget.querySelectorAll('.card')].filter(c => c.dataset.id !== id)
         .find(c => e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2);
-      S.sort = $('#sort').value = 'order';
+      S.sort = 'order';
       await api('move_task', { id, column: col, before: after?.dataset.id || '' }).catch(() => {});
       load();
     }
@@ -1032,10 +1027,10 @@ Vue.createApp({
       await api('create_task', { title: v, column: col }).catch(() => {});
       await load(); quickEl.value?.focus(); // stay open for the next one
     }
-    return { S, P, L, PRIO_COLOR, av, dragId, overCol, quickCol, quickText, quickEl,
-      lists, total, done, overdue, onOver, onDrop, openQuick, addQuick };
+    return { dragId, overCol, quickCol, quickText, quickEl,
+      lists, total, done: doneCount, overdue, onOver, onDrop, openQuick, addQuick };
   },
-}).mount('#board');
+}).use(shared).mount('#board');
 
 // ---------- Markdown (sanitized: agents write this) + mermaid ----------
 DOMPurify.addHook('afterSanitizeAttributes', n => { if (n.tagName === 'A') { n.target = '_blank'; n.rel = 'noopener noreferrer'; } });
@@ -1050,7 +1045,7 @@ function mermaidify(root) {
   });
   if (!nodes.length) return;
   // ponytail: 5 MB lib, loaded only when a diagram is on screen
-  mermaidP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js'; s.integrity = 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.append(s); });
+  mermaidP ??= loadScript('https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js', 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE');
   mermaidP.then(() => {
     mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: isDark() ? 'dark' : 'default' });
     return mermaid.run({ nodes });
@@ -1073,7 +1068,7 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
   const blocks = [...root.querySelectorAll('pre code')];
   if (!blocks.length) return;
   // ponytail: ~130 KB, loaded only when a code block is on screen
-  hljsP ??= new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js'; s.integrity = 'sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix'; s.crossOrigin = 'anonymous'; s.onload = res; s.onerror = rej; document.head.append(s); })
+  hljsP ??= loadScript('https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.12.0/highlight.min.js', 'sha384-wjfDDhOPPdjtva8vWBhWeVprSpmxisEu5aYT3q1JyACqXpdKpo3PWZTMVq24MBix')
     .then(() => hljs.configure({ ignoreUnescapedHTML: true }));
   hljsP.then(() => blocks.forEach(b => {
     if (!b.dataset.highlighted && (!/language-/.test(b.className) || hljs.getLanguage(b.className.match(/language-([\w+-]+)/)?.[1] || ''))) hljs.highlightElement(b);
@@ -1081,28 +1076,26 @@ function highlightCode(root) { // after mermaidify: mermaid blocks are already g
 }
 
 // ---------- Drawer (task details, autosave) ----------
-let openId = null;
 const drawer = $('#drawer');
 
 function openTask(id) {
-  closeSettings(); openId = S.openId = id; drawer.classList.add('open'); $('#scrim').classList.add('show');
-  const h = PROJ + '/' + id;
-  if (decodeURIComponent(location.hash.slice(1)) !== h) history.pushState(null, '', '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(id));
+  closeSettings(); S.openId = id;
+  setHash(S.proj, id);
 }
 function closeTask() {
-  if (!openId) return;
-  flush('title'); flush('desc'); openId = S.openId = null; drawer.classList.remove('open'); if (!settingsEl.classList.contains('open')) $('#scrim').classList.remove('show');
-  if (decodeURIComponent(location.hash.slice(1)) !== PROJ) history.pushState(null, '', '#' + encodeURIComponent(PROJ));
+  if (!S.openId) return;
+  flush('title'); flush('desc'); S.openId = null;
+  setHash(S.proj);
 }
 // URLs: http://host/#project opens a board, #project/KB-12 a task; back/forward work.
 async function route() {
-  const [pid, id] = decodeURIComponent(location.hash.slice(1)).split('/');
-  if (pid && pid !== PROJ) {
-    if (!PROJECTS.some(p => p.id === pid)) return toast(`Project ${pid} not found`);
+  const [pid, id] = readHash().split('/');
+  if (pid && pid !== S.proj) {
+    if (!S.projects.some(p => p.id === pid)) return toast(`Project ${pid} not found`);
     await switchProject(pid, true);
   }
   if (!id) return closeTask();
-  if (id === openId) return;
+  if (id === S.openId) return;
   if (byId(id)) openTask(id); else toast(`Task ${id} not found`);
 }
 window.addEventListener('hashchange', route);
@@ -1123,29 +1116,23 @@ const grow = el => { el.style.height = 'auto'; el.style.height = el.scrollHeight
 // Typed-text draft: while a field is focused it shows the draft, so a live reload can't overwrite it.
 const draft = () => Vue.reactive({ draft: null, orig: '', start(v) { this.draft = v; this.orig = v; }, end() { this.draft = null; } });
 
-// v-md: sanitized markdown + mermaid/svg/highlight, re-rendered only when the text changes (rethemeMd: theme).
-const vMd = {
-  mounted(el, b) { el._md = b.value; renderMd(el, b.value); },
-  updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
-};
 function renderMd(el, text) {
   el.innerHTML = text ? md(text) : `<span class="ph">${esc(el.dataset.ph || '')}</span>`;
   mermaidify(el); svgify(el); highlightCode(el);
 }
 const rethemeMd = () => document.querySelectorAll('.md').forEach(el => el._md != null && renderMd(el, el._md)); // re-theme mermaid
 
-const patch = fields => api('update_task', { id: openId, ...fields }).then(load).catch(() => load());
+const patch = fields => save('update_task', { id: S.openId, ...fields });
 
 Vue.createApp({
   template: '#tpl-drawer',
-  directives: { md: vMd },
   setup() {
     const t = Vue.computed(() => S.B.tasks.find(x => x.id === S.openId));
     const title = draft(), desc = draft();
     const editingDesc = Vue.ref(false), ckText = Vue.ref(''), cmText = Vue.ref(''), labelText = Vue.ref(''), copied = Vue.ref(false);
     const titleEl = Vue.ref(null), descEl = Vue.ref(null);
     Vue.watch(() => S.openId, () => { editingDesc.value = false; title.end(); desc.end(); ckText.value = cmText.value = labelText.value = ''; });
-    const done = Vue.computed(() => t.value?.checklist.filter(c => c.done).length ?? 0);
+    const done = Vue.computed(() => doneCount(t.value));
     const freeLabels = Vue.computed(() => S.B.labels.map(l => l.name).filter(l => !t.value?.labels.includes(l)));
     Vue.onUpdated(() => titleEl.value && grow(titleEl.value));
 
@@ -1153,7 +1140,7 @@ Vue.createApp({
       grow(e.target); title.draft = e.target.value; const id = t.value.id, v = title.draft;
       if (!v.trim()) return;
       t.value.title = v; // shown after blur and on refocus, before the save lands
-      later('title', () => api('update_task', { id, title: v }).then(load).catch(() => load())); // this task, even if another opens first
+      later('title', () => save('update_task', { id, title: v })); // this task, even if another opens first
     }
     const endTitle = () => { title.end(); flush('title'); };
     function cancelTitle(e) {
@@ -1181,12 +1168,12 @@ Vue.createApp({
       if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
       e.preventDefault(); e.stopPropagation(); flush('title'); flush('desc'); e.target.blur?.(); closeTask();
     }
-    const toggleCheck = (i, v) => { const ck = structuredClone(Vue.toRaw(t.value.checklist)); ck[i].done = v; patch({ checklist: ck }); };
-    const removeCheck = i => patch({ checklist: t.value.checklist.filter((_, j) => j !== i) });
+    const toggleCheck = (i, v) => { const ck = clone(t.value.checklist); ck[i].done = v; patch({ checklist: ck }); };
+    const removeCheck = i => patch({ checklist: without(t.value.checklist, i) });
     async function addCheck() { const v = ckText.value.trim(); if (!v) return; ckText.value = ''; await patch({ checklist: [...t.value.checklist, { text: v, done: false }] }); }
     async function addLabel() {
       const v = labelText.value.trim(); if (!v) return;
-      if (!L[v]) { // new label: add it to the board first
+      if (!labelColor(v)) { // new label: add it to the board first
         if (!confirm(`Create new label “${v}”?`)) return;
         await api('save_labels', [...S.B.labels, { name: v, color: randColor() }]).catch(() => {});
       }
@@ -1198,10 +1185,10 @@ Vue.createApp({
       await api('add_comment', { id: t.value.id, text: v }).then(() => { cmText.value = ''; }).catch(() => {});
       load();
     }
-    const move = col => api('move_task', { id: t.value.id, column: col }).then(load).catch(() => load());
-    const setHuman = v => api('set_human', { id: t.value.id, human: v }).then(load).catch(() => load());
+    const move = col => save('move_task', { id: t.value.id, column: col });
+    const setHuman = v => save('set_human', { id: t.value.id, human: v });
     async function copyLink() {
-      await navigator.clipboard?.writeText(location.origin + location.pathname + '#' + encodeURIComponent(PROJ) + '/' + encodeURIComponent(t.value.id)).catch(() => {});
+      await navigator.clipboard?.writeText(location.origin + location.pathname + hashOf(S.proj, t.value.id)).catch(() => {});
       copied.value = true; setTimeout(() => copied.value = false, 1200);
     }
     function toggleWide() {
@@ -1213,11 +1200,11 @@ Vue.createApp({
       const id = t.value.id; closeTask();
       await api('delete_task', { id }).catch(() => {}); load();
     }
-    return { S, P, L, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
-      ago, av, colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
+    return { member, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
+      colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
       toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, deleteTask };
   },
-}).mount('#dApp');
+}).use(shared).mount('#dApp');
 
 // ---------- Appearance (per browser) ----------
 function setTheme(v) {
@@ -1238,11 +1225,10 @@ setAccent(store.get('kanban:accent'));
 
 // ---------- Settings ----------
 const settingsEl = $('#settings');
-function openSettings() { if (openId) closeTask(); S.settingsN++; settingsEl.classList.add('open'); $('#scrim').classList.add('show'); }
-function closeSettings() { if (!settingsEl.classList.contains('open')) return; Object.keys(pending).forEach(flush); settingsEl.classList.remove('open'); $('#scrim').classList.remove('show'); }
+function openSettings() { if (S.openId) closeTask(); S.settingsN++; S.settingsOpen = true; }
+function closeSettings() { if (!S.settingsOpen) return; Object.keys(pending).forEach(flush); S.settingsOpen = false; }
 $('#settingsBtn').onclick = openSettings;
 
-const clone = x => JSON.parse(JSON.stringify(x));
 Vue.createApp({
   template: '#tpl-settings',
   setup() {
@@ -1250,7 +1236,7 @@ Vue.createApp({
     const sync = () => Object.assign(f, clone({ settings: S.B.settings, columns: S.B.columns, members: S.B.members, labels: S.B.labels }));
     const quiet = () => !typingIn(settingsEl) && !Object.keys(pending).length;
     Vue.watch(() => S.settingsN, sync);                                                // opened
-    Vue.watch(() => S.B, () => settingsEl.classList.contains('open') && quiet() && sync()); // live update
+    Vue.watch(() => S.B, () => S.settingsOpen && quiet() && sync()); // live update
     const refresh = async () => { await load(); sync(); };
     const NAV = [['s-general', 'General'], ['s-columns', 'Columns'], ['s-appearance', 'Appearance'], ['s-labels', 'Labels'],
       ['s-members', 'Members & agents'], ['s-mcp', 'MCP & skill'], ['s-data', 'Data']];
@@ -1266,14 +1252,14 @@ Vue.createApp({
       ['Any other agent (pi, opencode, …)', `${location.origin}/mcp?agent=<name>&project=${S.proj}`],
       ['Sync the kanban skill (teaches agents the workflow)', 'agent-kanban skill sync'],
     ]);
-    const saveSettings = () => later('settings', () => api('save_settings', clone(f.settings)).then(load).catch(load));
-    const saveCols = () => later('cols', () => api('save_columns', clone(f.columns)).then(load).catch(load));
-    const saveMembers = () => later('members', () => api('save_members', clone(f.members)).then(load).catch(load));
-    const saveLabels = () => later('labels', () => api('save_labels', clone(f.labels)).then(load).catch(load));
-    const setHeader = () => $('#boardName').textContent = f.settings.board;
+    const saveSettings = () => later('settings', () => save('save_settings', clone(f.settings)));
+    const saveCols = () => later('cols', () => save('save_columns', clone(f.columns)));
+    const saveMembers = () => later('members', () => save('save_members', clone(f.members)));
+    const saveLabels = () => later('labels', () => save('save_labels', clone(f.labels)));
+    const setHeader = () => S.B.settings.board = f.settings.board;
     const act = async fn => { try { await fn(); } catch { /* toast already shown */ } await refresh(); };
     const moveCol = (i, d) => act(() => { const c = clone(f.columns); [c[i], c[i + d]] = [c[i + d], c[i]]; return api('save_columns', c); });
-    const delCol = i => act(() => api('save_columns', clone(f.columns).filter((_, j) => j !== i)));
+    const delCol = i => act(() => api('save_columns', without(clone(f.columns), i)));
     async function addCol() {
       await act(() => api('save_columns', [...clone(f.columns), { id: 'c' + Date.now().toString(36), name: 'New column', color: '#7f848e' }]));
       await Vue.nextTick(); mainEl.value?.querySelector('#s-columns .row-i:last-child .grow')?.select();
@@ -1282,20 +1268,20 @@ Vue.createApp({
     function delLabel(i) {
       const l = f.labels[i];
       if (l.tasks && !confirm(`Remove “${l.name}” from ${l.tasks} task(s)?`)) return;
-      act(() => api('save_labels', clone(f.labels).filter((_, j) => j !== i)));
+      act(() => api('save_labels', without(clone(f.labels), i)));
     }
     async function addLabel() {
       const v = newLabel.value.trim(); if (!v) return;
-      if (L[v]) return toast(`Label “${v}” already exists`);
+      if (labelColor(v)) return toast(`Label “${v}” already exists`);
       newLabel.value = ''; await act(() => api('save_labels', [...clone(f.labels), { name: v, color: randColor() }]));
     }
     function delMember(i) {
       if (!confirm(`Remove ${f.members[i].name}? Their tasks become unassigned.`)) return;
-      act(() => api('save_members', clone(f.members).filter((_, j) => j !== i)));
+      act(() => api('save_members', without(clone(f.members), i)));
     }
     async function addMember() {
       const name = newMember.value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^[-_]+|[-_]+$/g, '').slice(0, 32);
-      if (!name || P[name]) return toast(name ? `${name} already exists` : 'Invalid name');
+      if (!name || member(name)) return toast(name ? `${name} already exists` : 'Invalid name');
       newMember.value = ''; await act(() => api('save_members', [...clone(f.members), { name, color: randColor(), agent: false }]));
     }
     async function copy(code, i) { await navigator.clipboard?.writeText(code).catch(() => {}); copied.value = i; setTimeout(() => copied.value = -1, 1500); }
@@ -1308,14 +1294,14 @@ Vue.createApp({
       } catch (err) { toast('Import failed: ' + err.message); }
     }
     function deleteAll() { if (confirm(`Delete all ${S.B.tasks.length} tasks? This cannot be undone.`)) act(() => api('delete_all_tasks')); }
-    return { S, f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets,
+    return { f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets,
       ARCHIVE: [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']],
       THEMES: [['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']], ACCENTS, PERMS, GLYPH,
-      av, ago, iconOf, ME, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
+      iconOf, ME, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
       saveSettings, saveCols, saveMembers, saveLabels, moveCol, delCol, addCol, renameLabel, delLabel, addLabel,
       delMember, addMember, copy, importFile, deleteAll };
   },
-}).mount('#setApp');
+}).use(shared).mount('#setApp');
 
 // ---------- Controls ----------
 document.addEventListener('click', e => {
@@ -1323,33 +1309,27 @@ document.addEventListener('click', e => {
   const f = e.target.closest('[data-open]'); if (f) openTask(f.dataset.open);
 });
 $('#scrim').onclick = () => { closeTask(); closeSettings(); };
-$('#new').onclick = async e => {
-  e.stopPropagation();
+async function newTask() {
   const t = await api('create_task', { title: 'Untitled task' }).catch(() => null); if (!t) return;
   await load(); openTask(t.id); await Vue.nextTick(); $('.d-title')?.select();
-};
-['q', 'sort', 'who'].forEach(k => $('#' + k).addEventListener('input', e => S[k] = e.target.value));
+}
 $('#rSearch').onclick = () => openPalette();
-$('#rNew').onclick = e => $('#new').onclick(e);
-const setPanel = on => { $('main').classList.toggle('noside', !on); $('#rPanel').classList.toggle('on', on); store.set('kanban:panel', on ? null : 'off'); };
-$('#rPanel').onclick = () => setPanel($('main').classList.contains('noside'));
+$('#rNew').onclick = () => newTask();
+const setPanel = on => { S.sidePanel = on; store.set('kanban:panel', on ? null : 'off'); };
+$('#rPanel').onclick = () => setPanel(!S.sidePanel);
 setPanel(store.get('kanban:panel') !== 'off');
-$('#q').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }                       // keep the filter
-  if (e.key === 'Escape') { e.stopPropagation(); e.target.value = S.q = ''; e.target.blur(); } // clear it
-});
 document.addEventListener('keydown', e => {
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return pal.classList.contains('open') ? closePalette() : openPalette(); }
-  if (e.key === 'Escape' && pal.classList.contains('open')) return closePalette();
-  if (e.key === 'Escape' && projPanel.classList.contains('open')) return toggleProjects(false);
-  if (e.key === 'Escape' && openId) return closeTask();
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return S.palOpen ? closePalette() : openPalette(); }
+  if (e.key === 'Escape' && S.palOpen) return closePalette();
+  if (e.key === 'Escape' && S.projOpen) return toggleProjects(false);
+  if (e.key === 'Escape' && S.openId) return closeTask();
   if (e.key === 'Escape') return closeSettings();
   if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Enter' && e.target.matches('.card')) openTask(e.target.dataset.id);
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); }
   if (e.key === 'p') { e.preventDefault(); toggleProjects(); }
-  if (e.key === 'n') { e.preventDefault(); $('#new').click(); }
+  if (e.key === 'n') { e.preventDefault(); newTask(); }
   if (e.key === ',') { e.preventDefault(); openSettings(); }
 });
 
