@@ -7,7 +7,7 @@
 **Hand your agent a ticket. Watch it ship.**
 
 A local kanban board your coding agents work on alongside you: Claude Code, Codex, opencode, pi,
-anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one local database, zero cloud.
+anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one local or remote sqlite database.
 
 [Quick start](#quick-start) · [Demos](#see-it-work) · [Download](https://github.com/Rishang/agent-kanban/releases/latest)
 
