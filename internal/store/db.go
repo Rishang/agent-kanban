@@ -129,7 +129,7 @@ func (d *DB) migrate() error {
 }
 
 // addColumnRoles runs once per database: on every board without roles, the last column becomes the done
-// column (what it already meant) and a Closed column is appended for tasks that won't be done.
+// column (what it already meant) and a Closed column is put first, before Todo, for tasks that won't be done.
 func (d *DB) addColumnRoles() error {
 	const key = "migrated:column-roles"
 	var n int
@@ -172,7 +172,10 @@ func (d *DB) addColumnRoles() error {
 		for i := 2; slices.ContainsFunc(cols, func(c Column) bool { return c.ID == id }); i++ {
 			id = fmt.Sprintf("%s-%d", RoleClosed, i)
 		}
-		if err := insertColumn(tx, pid, closedColumn(id), len(cols)); err != nil {
+		if _, err := tx.Exec(`UPDATE columns SET pos=pos+1 WHERE project=?`, pid); err != nil {
+			return err
+		}
+		if err := insertColumn(tx, pid, closedColumn(id), 0); err != nil {
 			return err
 		}
 	}
@@ -421,8 +424,8 @@ func (d *DB) AddProject(name, dir string) (Project, error) {
 }
 
 func seedProject(tx *sql.Tx, pid string) error {
-	cols := []Column{{ID: "todo", Name: "Todo", Color: "#61afef"}, {ID: "doing", Name: "In Progress", Color: "#d19a66", WIP: 3},
-		{ID: "review", Name: "Review", Color: "#e5c07b"}, {ID: "done", Name: "Done", Color: "#98c379", Role: RoleDone}, closedColumn(RoleClosed)}
+	cols := []Column{closedColumn(RoleClosed), {ID: "todo", Name: "Todo", Color: "#61afef"}, {ID: "doing", Name: "In Progress", Color: "#d19a66", WIP: 3},
+		{ID: "review", Name: "Review", Color: "#e5c07b"}, {ID: "done", Name: "Done", Color: "#98c379", Role: RoleDone}}
 	for i, c := range cols {
 		if err := insertColumn(tx, pid, c, i); err != nil {
 			return err

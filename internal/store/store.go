@@ -70,6 +70,17 @@ func ClosedColumn(cols []Column) (Column, bool) {
 	return Column{}, false
 }
 
+// StartColumn is the first column that is neither done nor closed: where new work lands by default.
+func StartColumn(cols []Column) (Column, bool) {
+	fin := Finished(cols)
+	for _, c := range cols {
+		if !fin[c.ID] {
+			return c, true
+		}
+	}
+	return Column{}, false
+}
+
 // Finished is the set of column ids whose tasks are no longer open: the done column and the closed column.
 func Finished(cols []Column) map[string]bool {
 	m := map[string]bool{}
@@ -682,6 +693,9 @@ func (s *Store) CreateTask(who, via string, in TaskInput) (t Task, err error) {
 			in.Column = d.st.DefaultCol
 			if d.checkCol(in.Column) != nil {
 				in.Column = d.cols[0].ID
+				if c, ok := StartColumn(d.cols); ok {
+					in.Column = c.ID
+				}
 			}
 		}
 		if in.Priority == "" {

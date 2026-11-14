@@ -143,27 +143,31 @@ func colRole(cols []store.Column, i int) string {
 	if d, ok := store.DoneColumn(cols); ok && d.ID == cols[i].ID {
 		return store.RoleDone
 	}
+	start, _ := store.StartColumn(cols)
 	n := strings.ToLower(cols[i].ID + " " + cols[i].Name)
 	switch {
 	case strings.Contains(n, "review") || strings.Contains(n, "qa") || strings.Contains(n, "test"):
 		return "review"
 	case strings.Contains(n, "progress") || strings.Contains(n, "doing") || strings.Contains(n, "wip") || strings.Contains(n, "active"):
 		return "in_progress"
-	case i == 0:
+	case cols[i].ID == start.ID: // the first open column, even when Closed sits before it
 		return "todo"
 	}
 	return ""
 }
 
-// colByRole returns the first column with role, falling back to the next column after the first for in_progress.
+// colByRole returns the first column with role, falling back to the open column after todo for in_progress.
 func colByRole(cols []store.Column, role string) (store.Column, bool) {
 	for i := range cols {
 		if colRole(cols, i) == role {
 			return cols[i], true
 		}
 	}
-	if role == "in_progress" && len(cols) > 2 {
-		return cols[1], true
+	if role == "in_progress" {
+		fin := store.Finished(cols)
+		if i := slices.IndexFunc(cols, func(c store.Column) bool { return !fin[c.ID] }); i >= 0 && i+1 < len(cols) && !fin[cols[i+1].ID] {
+			return cols[i+1], true
+		}
 	}
 	return store.Column{}, false
 }

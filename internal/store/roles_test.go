@@ -45,12 +45,12 @@ func TestMigrateColumnRoles(t *testing.T) {
 		for _, c := range b.Columns {
 			got = append(got, c.ID+":"+c.Role)
 		}
-		if strings.Join(got, ",") != "todo:,shipped:done,closed:closed" {
+		if strings.Join(got, ",") != "closed:closed,todo:,shipped:done" {
 			t.Fatalf("app columns after upgrade: %v", got)
 		}
 		o, _ := db.Project("odd")
 		ob, _ := o.Meta()
-		if n := len(ob.Columns); n != 4 || ob.Columns[1].Role != "" || ob.Columns[2].Role != RoleDone || ob.Columns[3].ID != "closed-2" {
+		if n := len(ob.Columns); n != 4 || ob.Columns[0].ID != "closed-2" || ob.Columns[2].Role != "" || ob.Columns[3].Role != RoleDone {
 			t.Fatalf("odd columns after upgrade: %+v", ob.Columns)
 		}
 		db.Close()
@@ -69,7 +69,7 @@ func TestColumnRoles(t *testing.T) {
 	if d, _ := DoneColumn(b.Columns); d.ID != "done" {
 		t.Fatalf("new board done column: %+v", b.Columns)
 	}
-	if c, ok := ClosedColumn(b.Columns); !ok || c.ID != "closed" || b.Columns[len(b.Columns)-1].ID != "closed" {
+	if c, ok := ClosedColumn(b.Columns); !ok || c.ID != "closed" || b.Columns[0].ID != "closed" {
 		t.Fatalf("new board closed column: %+v", b.Columns)
 	}
 	if b.Settings.Perms["close"] {
@@ -77,6 +77,9 @@ func TestColumnRoles(t *testing.T) {
 	}
 
 	a, _ := s.CreateTask("me", "ui", TaskInput{Title: "open"})
+	if a.Column != "todo" {
+		t.Fatalf("new task landed in %s, want todo", a.Column)
+	}
 	d, _ := s.CreateTask("me", "ui", TaskInput{Title: "shipped"})
 	c, _ := s.CreateTask("me", "ui", TaskInput{Title: "wontfix"})
 	s.MoveTask("me", "ui", MoveInput{ID: d.ID, Column: "done"})
@@ -103,11 +106,11 @@ func TestColumnRoles(t *testing.T) {
 	if err := s.SaveColumns("me", bad); err == nil || !strings.Contains(err.Error(), "unknown role") {
 		t.Fatalf("unknown role: %v", err)
 	}
-	moved := append([]Column{cols[len(cols)-1]}, cols[:len(cols)-1]...) // Closed first
+	moved := append(append([]Column{}, cols[1:]...), cols[0]) // Closed last
 	if err := s.SaveColumns("me", moved); err != nil {
 		t.Fatal(err)
 	}
-	if b2, _ := s.Meta(); b2.Columns[0].Role != RoleClosed || b2.Columns[len(b2.Columns)-1].Role != RoleDone {
+	if b2, _ := s.Meta(); b2.Columns[len(b2.Columns)-1].Role != RoleClosed || b2.Columns[len(b2.Columns)-2].Role != RoleDone {
 		t.Fatalf("roles lost on reorder: %+v", b2.Columns)
 	}
 	if open, _, _ := s.Counts(); open != 1 {
@@ -126,9 +129,12 @@ func TestColumnRoles(t *testing.T) {
 
 func TestDoneColumnFallback(t *testing.T) {
 	// boards without roles: the last column that isn't closed is done
-	cols := []Column{{ID: "a"}, {ID: "b"}, {ID: "x", Role: RoleClosed}}
+	cols := []Column{{ID: "x", Role: RoleClosed}, {ID: "a"}, {ID: "b"}}
 	if d, _ := DoneColumn(cols); d.ID != "b" {
 		t.Fatalf("fallback done = %s", d.ID)
+	}
+	if c, _ := StartColumn(cols); c.ID != "a" {
+		t.Fatalf("start column = %s, want a (Closed comes first)", c.ID)
 	}
 	if f := Finished(cols); !f["b"] || !f["x"] || f["a"] {
 		t.Fatalf("finished = %v", f)
