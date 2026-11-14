@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"net/http"
 	"regexp"
@@ -120,6 +121,11 @@ func Handler(d *store.DB, defProject, version, baseURL string) http.Handler {
 		s, err := d.Project(pid)
 		if err != nil {
 			return nil // the SDK answers 400; the error is in the server log
+		}
+		// Any request (initialize, tools/list, a call) counts as connected, so a client shows up as soon as it connects.
+		s.Touch(agent)
+		if err := s.JoinAgent(agent); err != nil {
+			log.Printf("mcp: add agent %s: %v", agent, err)
 		}
 		mu.Lock()
 		defer mu.Unlock()
