@@ -341,6 +341,22 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
 .row-i .num { width: 76px; flex: none; }
 .row-i .role { width: 110px; flex: none; }
 .card.closed .title { text-decoration: line-through; color: var(--muted); }
+/* Sub-tasks: listed inside the parent card and in the task panel */
+.subs { display: flex; flex-direction: column; gap: 1px; margin: -2px 0 8px 3px; padding-left: 6px; border-left: 1px solid var(--border); }
+.sub { display: flex; align-items: center; gap: 6px; padding: 3px 6px; border-radius: 6px; font-size: 12.5px; cursor: pointer; min-width: 0; }
+.sub:hover { background: var(--hover); }
+.sub .swatch { flex: none; }
+.sub .sid { font: 10.5px 'JetBrains Mono', monospace; color: var(--muted); flex: none; }
+.sub .st { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub .cn { color: var(--muted); font-size: 12px; flex: none; }
+.sub.fin .st { text-decoration: line-through; color: var(--muted); }
+.sub .avatar { width: 16px; height: 16px; }
+.d-sec .subs { margin: 0 0 6px; padding: 0; border: 0; }
+.d-sec .sub { font-size: 14px; padding: 6px 8px; margin: 0 -8px; }
+.d-sec .sub .avatar { width: 20px; height: 20px; }
+.subcount { display: inline-flex; align-items: center; gap: 3px; }
+.plink { color: var(--accent); cursor: pointer; }
+.plink:hover { text-decoration: underline; }
 .row-i .muted { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .icon-btn:disabled { opacity: .3; cursor: not-allowed; }
 .snippet { position: relative; margin-bottom: 14px; }
@@ -472,10 +488,14 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
         @dragstart="dragId = t.id" @dragend="dragId = overCol = null">
         <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="member(t.assignee)?.agent" title="Agent-managed">⚡ agent</span></div>
         <div class="title">{{ t.title }}</div>
+        <div v-if="subsOf(t.id).length" class="subs">
+          <div v-for="k in subsOf(t.id)" :key="k.id" class="sub" :class="{ fin: finished(k) }" :data-open="k.id" :title="k.id + ' · ' + colName(k.column)">
+            <i class="swatch" :style="{ background: colColor(k.column) }"></i><span class="sid">{{ k.id }}</span><span class="st">{{ k.title }}</span><avatar v-if="k.assignee" :who="k.assignee" /></div></div>
         <div class="meta">
           <span class="prio"><i :style="{ background: PRIO_COLOR[t.priority] }"></i>{{ t.priority }}</span>
           <span v-for="l in t.labels" :key="l" class="tag" :style="{ '--lc': labelColor(l) }">{{ l }}</span>
           <span v-if="t.due" :style="overdue(t) ? 'color:var(--p-urgent)' : ''">📅 {{ t.due.slice(5) }}</span>
+          <span v-if="subsOf(t.id).length" class="subcount" title="Sub-tasks done"><icon name="subtasks" :size="12" />{{ subsOf(t.id).filter(finished).length }}/{{ subsOf(t.id).length }}</span>
           <span v-if="t.checklist.length">☑ {{ done(t) }}/{{ t.checklist.length }}</span>
           <span v-if="t.comments.length">💬 {{ t.comments.length }}</span>
           <span v-if="t.link" title="Has a link">🔗</span>
@@ -543,7 +563,8 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
         @focus="title.start(t.title)" @input="onTitle" @blur="endTitle"
         @keydown.enter.exact.prevent="$event.target.blur()" @keydown.esc.stop="cancelTitle"
         @keydown.tab.exact.prevent="endTitle(); editDesc()"></textarea>
-      <div class="d-sub">in <b>{{ colName(t.column) }}</b> · updated {{ ago(t.updated) }}</div>
+      <div class="d-sub">in <b>{{ colName(t.column) }}</b> · updated {{ ago(t.updated) }}<template v-if="parentTask"> · sub-task of
+        <a class="plink" :data-open="parentTask.id">{{ parentTask.id }} {{ parentTask.title }}</a></template></div>
 
       <div class="d-sec"><h4>Description <button v-if="!editingDesc" class="icon-btn" @click="editDesc">✎ Edit</button></h4>
         <template v-if="editingDesc">
@@ -560,6 +581,13 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
           <input type="checkbox" :checked="c.done" @change="toggleCheck(i, $event.target.checked)"><span>{{ c.text }}</span>
           <button class="icon-btn" aria-label="Remove item" @click.prevent="removeCheck(i)">✕</button></label>
         <input class="add-line" v-model="ckText" placeholder="+ Add item" @keydown.enter="addCheck" @keydown.esc.stop="ckText = ''; $event.target.blur()"></div>
+
+      <div v-if="!t.parent" class="d-sec"><h4>Sub-tasks <span v-if="subs.length">{{ subs.filter(finished).length }}/{{ subs.length }}</span>
+        <span v-if="subs.length" class="bar"><span :style="{ width: subs.filter(finished).length / subs.length * 100 + '%' }"></span></span></h4>
+        <div v-if="subs.length" class="subs"><div v-for="k in subs" :key="k.id" class="sub" :class="{ fin: finished(k) }" :data-open="k.id">
+          <i class="swatch" :style="{ background: colColor(k.column) }"></i><span class="sid">{{ k.id }}</span><span class="st">{{ k.title }}</span>
+          <span class="cn">{{ colName(k.column) }}</span><avatar v-if="k.assignee" :who="k.assignee" /></div></div>
+        <input class="add-line" v-model="subText" placeholder="+ Add sub-task" @keydown.enter="addSub" @keydown.esc.stop="subText = ''; $event.target.blur()"></div>
 
       <div class="d-sec"><h4>Comments · {{ t.comments.length }}</h4>
         <div v-for="c in t.comments" :key="c.id" class="comment"><avatar :who="c.who" /><div class="bubble">
@@ -578,6 +606,9 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
       <label class="prop"><span>Assignee</span><select :value="t.assignee || ''" @change="patch({ assignee: $event.target.value })"><button><selectedcontent></selectedcontent></button>
         <option value=""><span class="avatar none"></span>Unassigned</option>
         <option v-for="m in assignable(t, t.assignee)" :key="m.name" :value="m.name"><avatar :who="m.name" />{{ m.name }} <small v-if="m.agent" class="opt-note">{{ isLive(m) ? 'agent' : 'offline' }}</small></option></select></label>
+      <label v-if="!subs.length" class="prop"><span>Parent</span><select :value="t.parent || ''" @change="patch({ parent: $event.target.value })"><button><selectedcontent></selectedcontent></button>
+        <option value="">None (top-level)</option>
+        <option v-for="x in parentOpts" :key="x.id" :value="x.id"><span class="sid">{{ x.id }}</span>{{ x.title }}</option></select></label>
       <label class="prop"><span>Due date</span><input type="date" :value="t.due || ''" @change="patch({ due: $event.target.value })"></label>
       <div class="prop"><span>Link</span><div class="linkrow"><input type="url" :value="t.link || ''" placeholder="https://… PR, issue, doc"
           @change="patch({ link: $event.target.value.trim() })" @keydown.esc.stop="$event.target.value = t.link || ''; $event.target.blur()">
@@ -712,6 +743,16 @@ const byId = id => S.B.tasks.find(t => t.id === id);
 const colName = id => S.B.columns.find(c => c.id === id)?.name ?? id;
 // Done = the column with role done (else the last one that isn't closed); closed = role closed. Both are finished, not open.
 const doneCol = () => S.B.columns.find(c => c.role === 'done') ?? S.B.columns.findLast(c => c.role !== 'closed');
+const colColor = id => S.B.columns.find(c => c.id === id)?.color || 'var(--muted)';
+// Sub-tasks by parent id, oldest first (pos only orders cards within one column). A task whose parent is gone counts as top-level.
+const kids = Vue.computed(() => {
+  const m = {}, ids = new Set(S.B.tasks.map(t => t.id));
+  for (const t of S.B.tasks) if (t.parent && ids.has(t.parent)) (m[t.parent] ||= []).push(t);
+  for (const k in m) m[k].sort((a, b) => a.created - b.created);
+  return m;
+});
+const subsOf = id => kids.value[id] || [];
+const isTop = t => !t.parent || !S.B.tasks.some(x => x.id === t.parent);
 const finished = t => t.column === doneCol()?.id || S.B.columns.some(c => c.role === 'closed' && c.id === t.column);
 const ME = () => S.B.settings.me;
 const randColor = () => '#' + (Math.random() * 0xffffff | 0).toString(16).padStart(6, '0');
@@ -840,6 +881,7 @@ const ICONS = {
   expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   collapse: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  subtasks: '<path d="M4 4v12a2 2 0 0 0 2 2h4M4 10h6"/><rect x="12" y="7" width="8" height="6" rx="1.5"/><rect x="12" y="15" width="8" height="6" rx="1.5"/>',
 };
 const Icon = {
   props: { name: String, size: { type: Number, default: 16 } },
@@ -859,7 +901,7 @@ const vMd = {
   updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
 };
 const shared = { install(app) {
-  Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without, isLive, assignable });
+  Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without, isLive, assignable, subsOf, finished, colName, colColor });
   app.config.compilerOptions.isCustomElement = tag => tag === 'selectedcontent'; // native element of the customizable select
   app.component('avatar', Avatar).component('icon', Icon).directive('md', vMd);
 } };
@@ -1048,11 +1090,11 @@ Vue.createApp({
     const quickEl = Vue.ref(null);
     const visible = Vue.computed(() => {
       const q = S.q.toLowerCase(), who = S.who;
-      return S.B.tasks.filter(t => (!who || t.assignee === who) && (q || !archived(t)) &&
-        (!q || (t.id + ' ' + t.title + ' ' + t.labels.join(' ')).toLowerCase().includes(q)));
+      const hit = t => (!who || t.assignee === who) && (!q || (t.id + ' ' + t.title + ' ' + t.labels.join(' ')).toLowerCase().includes(q));
+      return S.B.tasks.filter(t => isTop(t) && (q || !archived(t)) && (hit(t) || subsOf(t.id).some(hit)));
     });
     const lists = Vue.computed(() => Object.fromEntries(S.B.columns.map(c => [c.id, sorted(visible.value.filter(t => t.column === c.id))])));
-    const totals = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) if (!archived(t)) n[t.column] = (n[t.column] || 0) + 1; return n; });
+    const totals = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) if (isTop(t) && !archived(t)) n[t.column] = (n[t.column] || 0) + 1; return n; });
     const total = col => totals.value[col] || 0;
     const overdue = t => t.due && !finished(t) && t.due < new Date().toISOString().slice(0, 10);
     function onOver(e, col) { if (!dragId.value) return; e.preventDefault(); overCol.value = col; }
@@ -1177,8 +1219,18 @@ Vue.createApp({
     const title = draft(), desc = draft();
     const editingDesc = Vue.ref(false), ckText = Vue.ref(''), cmText = Vue.ref(''), labelText = Vue.ref(''), copied = Vue.ref(false);
     const titleEl = Vue.ref(null), descEl = Vue.ref(null);
-    Vue.watch(() => S.openId, () => { editingDesc.value = false; title.end(); desc.end(); ckText.value = cmText.value = labelText.value = ''; });
+    Vue.watch(() => S.openId, () => { editingDesc.value = false; title.end(); desc.end(); ckText.value = cmText.value = labelText.value = subText.value = ''; });
     const done = Vue.computed(() => doneCount(t.value));
+    const subs = Vue.computed(() => t.value ? subsOf(t.value.id) : []);
+    const parentTask = Vue.computed(() => t.value?.parent ? byId(t.value.parent) : null);
+    const parentOpts = Vue.computed(() => S.B.tasks.filter(x => !x.parent && x.id !== t.value?.id)); // one level: only top-level tasks
+    const subText = Vue.ref('');
+    async function addSub(e) {
+      const v = subText.value.trim(); if (!v) return;
+      subText.value = '';
+      await api('create_task', { title: v, parent: t.value.id }).catch(() => {});
+      await load(); e?.target?.focus(); // stay in the box for the next one
+    }
     const freeLabels = Vue.computed(() => S.B.labels.map(l => l.name).filter(l => !t.value?.labels.includes(l)));
     Vue.onUpdated(() => titleEl.value && grow(titleEl.value));
 
@@ -1245,13 +1297,15 @@ Vue.createApp({
       wide.value = !wide.value;
     }
     async function deleteTask() {
-      if (!confirm(`Delete ${t.value.id}? This cannot be undone.`)) return;
+      const n = subs.value.length;
+      if (!confirm(n ? `Delete ${t.value.id} and its ${n} sub-task${n === 1 ? '' : 's'}? This cannot be undone.` : `Delete ${t.value.id}? This cannot be undone.`)) return;
       const id = t.value.id; closeTask();
       await api('delete_task', { id }).catch(() => {}); load();
     }
     return { member, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
       colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
-      toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, wide, deleteTask };
+      toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, wide, deleteTask,
+      subs, parentTask, parentOpts, subText, addSub };
   },
 }).use(shared).mount('#dApp');
 
@@ -1355,8 +1409,8 @@ Vue.createApp({
 
 // ---------- Controls ----------
 document.addEventListener('click', e => {
+  const f = e.target.closest('[data-open]'); if (f) return openTask(f.dataset.open); // before .card: sub-task rows sit inside cards
   const c = e.target.closest('.card'); if (c) return openTask(c.dataset.id);
-  const f = e.target.closest('[data-open]'); if (f) openTask(f.dataset.open);
 });
 $('#scrim').onclick = () => { closeTask(); closeSettings(); };
 async function newTask() {

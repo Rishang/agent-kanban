@@ -18,6 +18,8 @@ For any non-trivial coding work, keep the board in step with what you are doing.
 
 A task that should not be done at all (duplicate, obsolete, out of scope, won't fix) is **closed**, not finished. If your tools include `close_task` and `get_board` lists `+close`, call `close_task id reason`: it posts the reason and moves the task to the closed column (`role=closed`). Otherwise add a comment with your reasoning and leave the decision to a human; don't move it to done. Done and closed tasks both count as no longer open.
 
+**Sub-tasks** (if `create_task` accepts `parent`): break a larger task into sub-tasks one level deep with `parent: KB-20`; a sub-task can't have its own. `list_tasks` marks sub-tasks `↳KB-20` and parents `{sub-tasks 1/4}`, and `get_task` lists them. Work on the sub-tasks, not the parent: `next_task` skips a parent while any sub-task is open, and you can't finish it until they are all done or closed.
+
 `get_board` once per session tells you the columns (with roles and WIP limits), labels, members and your permissions. Inputs are forgiving: columns and labels by name in any case, ids as `12` or `KB-12`, assignee `me`. If a call fails, the error lists the valid values; fix and retry once.
 
 Write tools reply with a one-line status, not the whole task. Call `get_task` only when you need the description or comments; `list_tasks` is one line per task.

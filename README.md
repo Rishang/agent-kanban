@@ -127,7 +127,7 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
 | `get_task` | Full description, checklist and comments |
 | `list_labels` | Labels with task counts |
-| `create_task` / `create_tasks` | Create one task, or up to 50 with per-item errors |
+| `create_task` / `create_tasks` | Create one task, or up to 50 with per-item errors; `parent` makes a sub-task |
 | `update_task` / `move_task` / `check_item` / `add_comment` | Lower-level edits |
 | `delete_task` | Off by default; enable in Settings → MCP & skill |
 
