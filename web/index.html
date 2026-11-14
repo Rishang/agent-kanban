@@ -693,7 +693,7 @@ if (!window.Vue || !window.marked || !window.DOMPurify) {
 }
 // ---------- State (from GET /api/board, refreshed on every SSE event) ----------
 // All UI state. S.B is the board from GET /api/board, replaced on every SSE event.
-const S = Vue.reactive({ B: { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' }, openId: null, online: null, palOpen: false, projOpen: false, settingsOpen: false, sidePanel: true, saved: '', live: false, q: '', who: '', sort: 'order', flashId: null,
+const S = Vue.reactive({ B: { settings: { perms: {} }, columns: [], members: [], labels: [], priorities: [], tasks: [], events: [], seen: {}, db: '' }, openId: null, online: null, palOpen: false, projOpen: false, settingsOpen: false, sidePanel: true, saved: '', live: false, q: '', who: '', sort: 'updated', flashId: null,
   projects: [], proj: null, pal: { q: '', n: 0 }, settingsN: 0 });
 const members = Vue.computed(() => Object.fromEntries(S.B.members.map(m => [m.name, m])));
 const labels = Vue.computed(() => Object.fromEntries(S.B.labels.map(l => [l.name, l.color])));
