@@ -44,6 +44,7 @@ agent-kanban skill sync          # downloads the board-workflow skill for Claude
 ```
 
 The skill is not built into the binary. `skill sync` fetches [`skills/kanban/SKILL.md`](skills/kanban/SKILL.md) from the `main` branch, so it needs internet and picks up skill updates without a new release. Re-run it to update. Use `--url` to pin a tag or point at a mirror (https only).
+The skill on `main` stays compatible with released binaries: guidance for newer tools is conditional, so agents on an older release skip what their server doesn't have.
 
 Connect an agent (inside the repo):
 
@@ -205,3 +206,12 @@ task test   # also: task fmt, task lint, task build
 ```
 
 The server listens on loopback only, rejects foreign `Host` headers and non-JSON posts, and sanitizes all markdown.
+
+### Editing the skill
+
+Every released binary syncs `skills/kanban/SKILL.md` from `main`, so a skill edit reaches users of older releases too:
+
+- Make guidance for a new tool or permission conditional, with a fallback: "If your tools include `close_task` and `get_board` lists `+close`, …; otherwise …". Agents can see their own tool list.
+- Don't remove or rename guidance for a tool that a release still ships.
+- Refer to permissions and column roles as `get_board` reports them, not as a fixed list.
+- Before merging, compare the tools and permissions the skill names with the oldest supported release's `tools/list` and `get_board`.
