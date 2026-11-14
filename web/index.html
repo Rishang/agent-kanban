@@ -221,6 +221,25 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .prop select, .prop input { width: 100%; border: 1px solid transparent; background: none; padding: 6px 8px; margin-left: -8px; border-radius: 6px; cursor: pointer; outline: none; }
 .prop select:hover, .prop input:hover, .prop select:focus, .prop input:focus { background: var(--hover); border-color: var(--border); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Dropdowns: Chrome's customizable select (base-select) gets the board's look; other browsers keep the native one. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { display: inline-flex; align-items: center; gap: 8px; }
+  select::picker-icon { content: ''; width: 14px; height: 14px; margin-inline-start: auto; flex: none; background: var(--muted); transition: rotate .15s;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat; }
+  select:hover::picker-icon, select:open::picker-icon { background: var(--text); }
+  select:open::picker-icon { rotate: 180deg; }
+  ::picker(select) { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin-block: 4px;
+    box-shadow: 0 12px 32px light-dark(rgba(16,24,40,.14), rgba(0,0,0,.55)); max-block-size: min(360px, 60vh); }
+  option { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+  option:hover, option:focus-visible { background: var(--hover); outline: none; }
+  option:checked { font-weight: 600; }
+  option::checkmark { order: 1; margin-inline-start: auto; padding-inline-start: 12px; color: var(--accent); }
+  selectedcontent { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; white-space: nowrap; }
+}
+option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
+.avatar.none { background: none; border: 1.5px dashed var(--muted); opacity: .7; }
+.opt-note { color: var(--muted); font-size: 12px; font-weight: 400; }
 .chips .tag button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 0 0 3px; opacity: .6; }
 .chips input { width: auto !important; flex: 1; min-width: 80px; font-size: 12px; }
 .d-sec { margin-top: 30px; }
@@ -552,13 +571,13 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
           <div class="row"><span class="hint" style="margin:0">Ctrl+Enter to send</span><button class="btn" @click="sendComment">Comment</button></div></div></div>
     </div>
     <div class="d-side"><div class="props">
-      <label class="prop"><span>Status</span><select :value="t.column" @change="move($event.target.value)">
-        <option v-for="c in S.B.columns" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
-      <label class="prop"><span>Priority</span><select :value="t.priority" @change="patch({ priority: $event.target.value })">
-        <option v-for="p in S.B.priorities" :key="p" :value="p">{{ p[0].toUpperCase() + p.slice(1) }}</option></select></label>
-      <label class="prop"><span>Assignee</span><select :value="t.assignee || ''" @change="patch({ assignee: $event.target.value })">
-        <option value="">Unassigned</option>
-        <option v-for="m in assignable(t, t.assignee)" :key="m.name" :value="m.name">{{ m.name + (m.agent ? (isLive(m) ? ' (agent)' : ' (agent, offline)') : '') }}</option></select></label>
+      <label class="prop"><span>Status</span><select :value="t.column" @change="move($event.target.value)"><button><selectedcontent></selectedcontent></button>
+        <option v-for="c in S.B.columns" :key="c.id" :value="c.id"><i class="swatch" :style="{ background: c.color }"></i>{{ c.name }}</option></select></label>
+      <label class="prop"><span>Priority</span><select :value="t.priority" @change="patch({ priority: $event.target.value })"><button><selectedcontent></selectedcontent></button>
+        <option v-for="p in S.B.priorities" :key="p" :value="p"><i class="swatch" :style="{ background: PRIO_COLOR[p] }"></i>{{ p[0].toUpperCase() + p.slice(1) }}</option></select></label>
+      <label class="prop"><span>Assignee</span><select :value="t.assignee || ''" @change="patch({ assignee: $event.target.value })"><button><selectedcontent></selectedcontent></button>
+        <option value=""><span class="avatar none"></span>Unassigned</option>
+        <option v-for="m in assignable(t, t.assignee)" :key="m.name" :value="m.name"><avatar :who="m.name" />{{ m.name }} <small v-if="m.agent" class="opt-note">{{ isLive(m) ? 'agent' : 'offline' }}</small></option></select></label>
       <label class="prop"><span>Due date</span><input type="date" :value="t.due || ''" @change="patch({ due: $event.target.value })"></label>
       <div class="prop"><span>Link</span><div class="linkrow"><input type="url" :value="t.link || ''" placeholder="https://… PR, issue, doc"
           @change="patch({ link: $event.target.value.trim() })" @keydown.esc.stop="$event.target.value = t.link || ''; $event.target.blur()">
@@ -841,6 +860,7 @@ const vMd = {
 };
 const shared = { install(app) {
   Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without, isLive, assignable });
+  app.config.compilerOptions.isCustomElement = tag => tag === 'selectedcontent'; // native element of the customizable select
   app.component('avatar', Avatar).component('icon', Icon).directive('md', vMd);
 } };
 
@@ -953,7 +973,9 @@ function connect() {
 const pending = {};
 function later(key, fn, ms = 500) { clearTimeout(pending[key]?.t); pending[key] = { fn, t: setTimeout(() => { delete pending[key]; fn(); }, ms) }; }
 function flush(key) { const p = pending[key]; if (p) { clearTimeout(p.t); delete pending[key]; p.fn(); } }
-const typingIn = el => el.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
+const typingIn = el => el.contains(document.activeElement) && !!document.activeElement.closest('input, textarea, select');
+// An open customizable-select picker owns its keys (arrows, typeahead, Esc). Older browsers don't know :open.
+const pickerOpen = e => { try { return !!e.target.closest?.('select')?.matches(':open'); } catch { return false; } };
 
 function afterLoad() {
   S.online = true;
@@ -1188,7 +1210,8 @@ Vue.createApp({
     // Ctrl/⌘+Enter anywhere in the drawer (except the comment box): save and close
     function onKey(e) {
       // Esc in a field without its own handler (selects, due date, toggles): leave the field, keep the drawer open
-      if (e.key === 'Escape' && e.target.matches('input, select, textarea')) { e.stopPropagation(); return e.target.blur(); }
+      const field = e.target.closest('input, select, textarea');
+      if (e.key === 'Escape' && field) { e.stopPropagation(); return field.blur(); }
       if (!(e.ctrlKey || e.metaKey) || e.key !== 'Enter') return;
       e.preventDefault(); e.stopPropagation(); flush('title'); flush('desc'); e.target.blur?.(); closeTask();
     }
@@ -1346,12 +1369,13 @@ const setPanel = on => { S.sidePanel = on; store.set('kanban:panel', on ? null :
 $('#rPanel').onclick = () => setPanel(!S.sidePanel);
 setPanel(store.get('kanban:panel') !== 'off');
 document.addEventListener('keydown', e => {
+  if (pickerOpen(e)) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); return S.palOpen ? closePalette() : openPalette(); }
   if (e.key === 'Escape' && S.palOpen) return closePalette();
   if (e.key === 'Escape' && S.projOpen) return toggleProjects(false);
   if (e.key === 'Escape' && S.openId) return closeTask();
   if (e.key === 'Escape') return closeSettings();
-  if (e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Enter' && e.target.matches('.card')) openTask(e.target.dataset.id);
   if (e.key === '/') { e.preventDefault(); openPalette(); }
   if (e.key === 'f') { e.preventDefault(); $('#q').focus(); $('#q').select(); }
