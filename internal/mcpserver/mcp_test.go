@@ -86,6 +86,25 @@ func TestPickNext(t *testing.T) {
 	}
 }
 
+func TestPickNextSubtasks(t *testing.T) {
+	tasks := []store.Task{
+		{ID: "KB-1", Column: "todo", Priority: "urgent"},              // parent with an open sub-task: skipped
+		{ID: "KB-2", Column: "todo", Priority: "low", Parent: "KB-1"}, // the sub-task is the work
+		{ID: "KB-3", Column: "todo", Priority: "high"},                // parent whose sub-tasks are all done
+		{ID: "KB-4", Column: "done", Parent: "KB-3"},
+	}
+	best, _, alts := pickNext(cols, tasks, "claude")
+	if best == nil || best.ID != "KB-3" || len(alts) != 1 || alts[0].ID != "KB-2" {
+		t.Fatalf("pickNext = %+v %+v", best, alts)
+	}
+	if got := subProgress(cols, tasks); got["KB-1"] != "0/1" || got["KB-3"] != "1/1" {
+		t.Errorf("subProgress = %v", got)
+	}
+	if got := openSubs(cols, tasks); len(got["KB-1"]) != 1 || len(got["KB-3"]) != 0 {
+		t.Errorf("openSubs = %v", got)
+	}
+}
+
 func TestAgentSchema(t *testing.T) {
 	for name, sc := range map[string]any{"input": agentSchema[store.TaskInput](), "patch": agentSchema[store.TaskPatch](), "many": agentSchema[CreateMany]()} {
 		b, _ := json.Marshal(sc)
