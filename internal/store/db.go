@@ -129,7 +129,7 @@ func (d *DB) migrate() error {
 }
 
 // addColumnRoles runs once per database: on every board without roles, the last column becomes the done
-// column (what it already meant) and a Closed column is put first, before Todo, for tasks that won't be done.
+// column (what it already meant) and a "Not planned" column (role closed) is put first, before Todo, for tasks that won't be done.
 func (d *DB) addColumnRoles() error {
 	const key = "migrated:column-roles"
 	var n int
@@ -190,7 +190,7 @@ func (d *DB) addColumnRoles() error {
 }
 
 func closedColumn(id string) Column {
-	return Column{ID: id, Name: "Closed", Color: "#7f848e", Role: RoleClosed}
+	return Column{ID: id, Name: "Not planned", Color: "#7f848e", Role: RoleClosed}
 }
 
 func (d *DB) Close() error {

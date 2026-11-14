@@ -122,7 +122,7 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `start_task` | Assign yourself, move to in progress and post your plan, in one call |
 | `update_progress` | Tick checklist items (by index or text), add items, post a note |
 | `finish_task` | Summary + PR link, move to review (or Done with `done: true` and the *finish* permission) |
-| `close_task` | Won't do (duplicate, obsolete, out of scope): posts the reason and moves the task to **Closed**. Needs the *close* permission, off by default |
+| `close_task` | Won't do (duplicate, obsolete, out of scope): posts the reason and moves the task to **Not planned**. Needs the *close* permission, off by default |
 | `my_tasks` | Your open tasks, for resuming work |
 | `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
 | `get_task` | Full description, checklist and comments |
