@@ -44,6 +44,7 @@ agent-kanban skill sync          # downloads the board-workflow skill for Claude
 ```
 
 The skill is not built into the binary. `skill sync` fetches [`skills/kanban/SKILL.md`](skills/kanban/SKILL.md) from the `main` branch, so it needs internet and picks up skill updates without a new release. Re-run it to update. Use `--url` to pin a tag or point at a mirror (https only).
+The skill on `main` stays compatible with released binaries: guidance for newer tools is conditional, so agents on an older release skip what their server doesn't have.
 
 Connect an agent (inside the repo):
 
@@ -76,7 +77,7 @@ Anything else: `http://127.0.0.1:7777/mcp?agent=<name>&project=<project>`.
 | ⚡ | **Live** | Every change streams to open browsers over SSE; Activity shows who did what, via UI or MCP |
 | 🗂️ | **Rich tasks** | Priorities, labels, assignees, due dates, checklists, comments, links, WIP limits |
 | 📝 | **Markdown** | Sanitized GitHub-flavoured markdown with highlighted code, mermaid diagrams and SVG |
-| 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` |
+| 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` (`is:done`, `is:closed`) |
 | 📁 | **Multi-project** | Each repo is a project in one shared database; task URLs like `/#my-app/KB-12` |
 | 🎨 | **Themes** | Warm light and dark themes, eleven accents |
 | ☁️ | **Optional sync** | Turso Cloud sync to share boards across machines; local-only by default |
@@ -121,6 +122,7 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `start_task` | Assign yourself, move to in progress and post your plan, in one call |
 | `update_progress` | Tick checklist items (by index or text), add items, post a note |
 | `finish_task` | Summary + PR link, move to review (or Done with `done: true` and the *finish* permission) |
+| `close_task` | Won't do (duplicate, obsolete, out of scope): posts the reason and moves the task to **Closed**. Needs the *close* permission, off by default |
 | `my_tasks` | Your open tasks, for resuming work |
 | `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
 | `get_task` | Full description, checklist and comments |
@@ -204,3 +206,12 @@ task test   # also: task fmt, task lint, task build
 ```
 
 The server listens on loopback only, rejects foreign `Host` headers and non-JSON posts, and sanitizes all markdown.
+
+### Editing the skill
+
+Every released binary syncs `skills/kanban/SKILL.md` from `main`, so a skill edit reaches users of older releases too:
+
+- Make guidance for a new tool or permission conditional, with a fallback: "If your tools include `close_task` and `get_board` lists `+close`, …; otherwise …". Agents can see their own tool list.
+- Don't remove or rename guidance for a tool that a release still ships.
+- Refer to permissions and column roles as `get_board` reports them, not as a fixed list.
+- Before merging, compare the tools and permissions the skill names with the oldest supported release's `tools/list` and `get_board`.

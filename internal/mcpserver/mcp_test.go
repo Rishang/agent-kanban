@@ -63,6 +63,23 @@ func TestPickNext(t *testing.T) {
 	if !strings.Contains(reason, "WIP limit") {
 		t.Errorf("full in-progress column should be mentioned: %q", reason)
 	}
+	// a closed task assigned to you is not "in progress"
+	withClosed := append([]store.Column{{ID: "closed", Name: "Closed", Role: store.RoleClosed}}, cols...) // Closed first, as on new boards
+	if best, _, _ := pickNext(withClosed, append(tasks, store.Task{ID: "KB-8", Column: "closed", Assignee: "claude"}), "claude"); best == nil || best.ID != "KB-4" {
+		t.Fatalf("closed task picked as in progress: %+v", best)
+	}
+	for i, want := range []string{"closed", "todo", "in_progress", "review", "done"} {
+		if got := colRole(withClosed, i); got != want {
+			t.Errorf("colRole(%s) = %q, want %q", withClosed[i].ID, got, want)
+		}
+	}
+	plain := []store.Column{{ID: "closed", Role: store.RoleClosed}, {ID: "backlog"}, {ID: "next"}, {ID: "shipped", Role: store.RoleDone}}
+	if c, ok := colByRole(plain, "in_progress"); !ok || c.ID != "next" {
+		t.Errorf("in_progress fallback = %v %v, want next", c.ID, ok)
+	}
+	if c, ok := colByRole(plain, "todo"); !ok || c.ID != "backlog" {
+		t.Errorf("todo = %v %v, want backlog", c.ID, ok)
+	}
 	tasks = append(tasks, store.Task{ID: "KB-7", Column: "doing", Assignee: "claude"})
 	if best, reason, _ := pickNext(cols, tasks, "claude"); best == nil || best.ID != "KB-7" || !strings.Contains(reason, "already") {
 		t.Fatalf("own in-progress task first: %+v %q", best, reason)
