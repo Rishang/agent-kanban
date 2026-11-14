@@ -18,7 +18,7 @@ var Priorities = []string{"urgent", "high", "medium", "low"}
 // Perms an agent may be granted; keys match Settings.Perms.
 var PermNames = map[string]string{
 	"create": "create tasks", "edit": "edit tasks", "move": "move tasks between columns",
-	"finish": "move tasks to the last column", "comment": "comment", "delete": "delete tasks",
+	"finish": "move tasks to the done column", "close": "close tasks (won't do)", "comment": "comment", "delete": "delete tasks",
 }
 
 type Settings struct {
@@ -36,6 +36,50 @@ type Column struct {
 	Name  string `json:"name"`
 	Color string `json:"color"`
 	WIP   int    `json:"wip,omitempty"`
+	Role  string `json:"role"` // "", RoleDone or RoleClosed
+}
+
+// Column roles. Done holds finished work; closed holds tasks that won't be done. Both count as finished.
+const (
+	RoleDone   = "done"
+	RoleClosed = "closed"
+)
+
+// DoneColumn is the column with the done role, else the last column that isn't closed (boards from before roles).
+func DoneColumn(cols []Column) (Column, bool) {
+	for _, c := range cols {
+		if c.Role == RoleDone {
+			return c, true
+		}
+	}
+	for i := len(cols) - 1; i >= 0; i-- {
+		if cols[i].Role != RoleClosed {
+			return cols[i], true
+		}
+	}
+	return Column{}, false
+}
+
+// ClosedColumn is the column with the closed role, if the board has one.
+func ClosedColumn(cols []Column) (Column, bool) {
+	for _, c := range cols {
+		if c.Role == RoleClosed {
+			return c, true
+		}
+	}
+	return Column{}, false
+}
+
+// Finished is the set of column ids whose tasks are no longer open: the done column and the closed column.
+func Finished(cols []Column) map[string]bool {
+	m := map[string]bool{}
+	if c, ok := DoneColumn(cols); ok {
+		m[c.ID] = true
+	}
+	if c, ok := ClosedColumn(cols); ok {
+		m[c.ID] = true
+	}
+	return m
 }
 
 type Member struct {
@@ -186,7 +230,7 @@ func getSettings(q querier, pid string) (Settings, error) {
 }
 
 func getColumns(q querier, pid string) ([]Column, error) {
-	rows, err := q.Query(`SELECT id,name,color,wip FROM columns WHERE project=? ORDER BY pos`, pid)
+	rows, err := q.Query(`SELECT id,name,color,wip,role FROM columns WHERE project=? ORDER BY pos`, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +238,7 @@ func getColumns(q querier, pid string) ([]Column, error) {
 	var out []Column
 	for rows.Next() {
 		var c Column
-		if err := rows.Scan(&c.ID, &c.Name, &c.Color, &c.WIP); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Color, &c.WIP, &c.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -411,14 +455,30 @@ func (s *Store) CommentCounts() (map[string]int, error) {
 	return out, rows.Err()
 }
 
-// Counts returns how many tasks are open (not in the last column) and in total; 0, 0 without columns.
+// Counts returns how many tasks are open (not done or closed) and in total.
 func (s *Store) Counts() (open, total int, err error) {
 	cols, err := getColumns(s.db, s.pid)
-	if err != nil || len(cols) == 0 {
+	if err != nil {
 		return 0, 0, err
 	}
-	err = s.db.QueryRow(`SELECT count(*),coalesce(sum(col<>?),0) FROM tasks WHERE project=?`, cols[len(cols)-1].ID, s.pid).Scan(&total, &open)
-	return open, total, err
+	fin := Finished(cols)
+	rows, err := s.db.Query(`SELECT col,count(*) FROM tasks WHERE project=? GROUP BY col`, s.pid)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var col string
+		var n int
+		if err := rows.Scan(&col, &n); err != nil {
+			return 0, 0, err
+		}
+		total += n
+		if !fin[col] {
+			open += n
+		}
+	}
+	return open, total, rows.Err()
 }
 
 func (s *Store) Task(id string) (Task, error) { return getTask(s.db, s.pid, id) }
@@ -440,9 +500,9 @@ func (s *Store) Events(limit int) ([]Event, error) {
 	return out, rows.Err()
 }
 
-// Archived reports whether a task is hidden by the auto-archive setting.
-func Archived(t Task, st Settings, lastCol string) bool {
-	return st.ArchiveDays > 0 && t.Column == lastCol && time.Since(time.UnixMilli(t.Updated)) > time.Duration(st.ArchiveDays)*24*time.Hour
+// Archived reports whether a task is hidden by the auto-archive setting (finished = Finished(columns)).
+func Archived(t Task, st Settings, finished map[string]bool) bool {
+	return st.ArchiveDays > 0 && finished[t.Column] && time.Since(time.UnixMilli(t.Updated)) > time.Duration(st.ArchiveDays)*24*time.Hour
 }
 
 // ---------- writes ----------
@@ -849,6 +909,9 @@ func (s *Store) SaveColumns(who string, cols []Column) error {
 			}
 			keep[c.ID] = true
 		}
+		if err := checkRoles(cols); err != nil {
+			return Event{}, err
+		}
 		old, err := getColumns(tx, s.pid)
 		if err != nil {
 			return Event{}, err
@@ -866,12 +929,36 @@ func (s *Store) SaveColumns(who string, cols []Column) error {
 			return Event{}, err
 		}
 		for i, c := range cols {
-			if _, err := tx.Exec(`INSERT INTO columns VALUES (?,?,?,?,?,?)`, s.pid, c.ID, c.Name, c.Color, max(c.WIP, 0), i); err != nil {
+			if err := insertColumn(tx, s.pid, c, i); err != nil {
 				return Event{}, err
 			}
 		}
 		return Event{Action: "updated columns"}, nil
 	})
+}
+
+// checkRoles allows at most one done and one closed column.
+func checkRoles(cols []Column) error {
+	seen := map[string]string{}
+	for _, c := range cols {
+		switch c.Role {
+		case "":
+			continue
+		case RoleDone, RoleClosed:
+		default:
+			return fmt.Errorf("column %q: unknown role %q; valid: done, closed, or empty", c.Name, c.Role)
+		}
+		if other, ok := seen[c.Role]; ok {
+			return fmt.Errorf("only one %s column allowed (%q and %q)", c.Role, other, c.Name)
+		}
+		seen[c.Role] = c.Name
+	}
+	return nil
+}
+
+func insertColumn(tx *sql.Tx, pid string, c Column, pos int) error {
+	_, err := tx.Exec(`INSERT INTO columns(project,id,name,color,wip,pos,role) VALUES (?,?,?,?,?,?,?)`, pid, c.ID, c.Name, c.Color, max(c.WIP, 0), pos, c.Role)
+	return err
 }
 
 // SaveMembers replaces the member list (shared by every project); removed members' tasks become unassigned.
@@ -1012,6 +1099,9 @@ func (s *Store) Import(who string, b Board) error {
 	if len(b.Columns) == 0 {
 		return errors.New("import has no columns")
 	}
+	if err := checkRoles(b.Columns); err != nil {
+		return err
+	}
 	return s.write(who, "ui", func(tx *sql.Tx) (Event, error) {
 		for _, t := range []string{"comments", "tasks", "columns", "labels"} {
 			if _, err := tx.Exec(`DELETE FROM `+t+` WHERE project=?`, s.pid); err != nil {
@@ -1019,7 +1109,7 @@ func (s *Store) Import(who string, b Board) error {
 			}
 		}
 		for i, c := range b.Columns {
-			if _, err := tx.Exec(`INSERT INTO columns VALUES (?,?,?,?,?,?)`, s.pid, c.ID, c.Name, c.Color, c.WIP, i); err != nil {
+			if err := insertColumn(tx, s.pid, c, i); err != nil {
 				return Event{}, err
 			}
 		}

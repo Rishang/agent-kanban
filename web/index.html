@@ -319,6 +319,8 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 .row-i input[type=color] { width: 26px; height: 26px; border: 0; padding: 0; background: none; cursor: pointer; flex: none; }
 .row-i .grow { flex: 1; min-width: 0; max-width: none; }
 .row-i .num { width: 76px; flex: none; }
+.row-i .role { width: 110px; flex: none; }
+.card.closed .title { text-decoration: line-through; color: var(--muted); }
 .row-i .muted { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .icon-btn:disabled { opacity: .3; cursor: not-allowed; }
 .snippet { position: relative; margin-bottom: 14px; }
@@ -446,7 +448,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
       <span v-if="c.wip" class="wip" :class="{ over: total(c.id) > c.wip }">WIP {{ total(c.id) }}/{{ c.wip }}</span></div>
     <div class="cards" :data-col="c.id" :class="{ over: overCol === c.id }" @dragover="onOver($event, c.id)" @drop="onDrop($event, c.id)">
       <article v-for="t in lists[c.id]" :key="t.id" class="card" :data-id="t.id" tabindex="0" draggable="true"
-        :class="{ sel: t.id === S.openId, dragging: t.id === dragId, flash: t.id === S.flashId }"
+        :class="{ sel: t.id === S.openId, dragging: t.id === dragId, flash: t.id === S.flashId, closed: c.role === 'closed' }"
         @dragstart="dragId = t.id" @dragend="dragId = overCol = null">
         <div class="id"><span>{{ t.id }}</span><span v-if="t.human" class="human" title="Human-only: agents skip it">👤 human</span><span v-else-if="member(t.assignee)?.agent" title="Agent-managed">⚡ agent</span></div>
         <div class="title">{{ t.title }}</div>
@@ -587,15 +589,16 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
           <select class="inp" v-model="f.settings.defaultCol" @change="saveSettings"><option v-for="c in f.columns" :key="c.id" :value="c.id">{{ c.name }}</option></select></label>
         <label class="field"><span>Default assignee<small>For tasks created in the UI</small></span>
           <select class="inp" v-model="f.settings.defaultAssignee" @change="saveSettings"><option value="">Unassigned</option><option v-for="m in f.members" :key="m.name" :value="m.name">{{ m.name }}</option></select></label>
-        <label class="field"><span>Auto-archive<small>Hide tasks sitting in <b>{{ f.columns.at(-1)?.name }}</b> this long. They stay in the DB and show up in search.</small></span>
+        <label class="field"><span>Auto-archive<small>Hide done and closed tasks after this long. They stay in the DB and show up in search.</small></span>
           <select class="inp" v-model.number="f.settings.archiveDays" @change="saveSettings"><option v-for="[v, l] in ARCHIVE" :key="v" :value="v">{{ l }}</option></select></label>
       </section>
 
-      <section class="s-sec" id="s-columns"><h3>Columns</h3><p>Rename, recolor, set WIP limits (empty = no limit), reorder. Columns with tasks can't be deleted.</p>
+      <section class="s-sec" id="s-columns"><h3>Columns</h3><p>Rename, recolor, set WIP limits (empty = no limit), reorder. Columns with tasks can't be deleted. Role <b>Done</b> holds finished work, <b>Closed</b> holds tasks that won't be done; neither counts as open.</p>
         <div class="list"><div v-for="(c, i) in f.columns" :key="c.id" class="row-i">
           <input type="color" v-model="c.color" aria-label="Column color" @input="saveCols">
           <input class="inp grow" v-model="c.name" aria-label="Column name" @input="saveCols">
           <input class="inp num" type="number" min="1" placeholder="WIP" :value="c.wip || ''" aria-label="WIP limit" @input="c.wip = Math.max(0, +$event.target.value || 0); saveCols()">
+          <select class="inp role" v-model="c.role" aria-label="Column role" @change="setRole(i)"><option value="">No role</option><option value="done">Done</option><option value="closed">Closed</option></select>
           <span class="muted">{{ count(c.id) }} task{{ count(c.id) === 1 ? '' : 's' }}</span>
           <button class="icon-btn" :disabled="i === 0" aria-label="Move up" @click="moveCol(i, -1)">↑</button>
           <button class="icon-btn" :disabled="i === f.columns.length - 1" aria-label="Move down" @click="moveCol(i, 1)">↓</button>
@@ -680,14 +683,16 @@ const PRIO_COLOR = { urgent: 'var(--p-urgent)', high: 'var(--p-high)', medium: '
 // One family (Tailwind 500s): equal weight, readable as text on dark and as button fill with white text.
 const ACCENTS = [['Blue', '#3b82f6'], ['Indigo', '#6366f1'], ['Violet', '#8b5cf6'], ['Pink', '#ec4899'], ['Rose', '#f43f5e'],
   ['Orange', '#f97316'], ['Amber', '#f59e0b'], ['Emerald', '#10b981'], ['Teal', '#14b8a6'], ['Sky', '#0ea5e9'], ['Grey', '#71717a']];
-const PERMS = { create: 'Create tasks', edit: 'Edit fields & checklists', move: 'Move between columns', finish: 'Move to the last column (Done)', comment: 'Comment', delete: 'Delete tasks' };
+const PERMS = { create: 'Create tasks', edit: 'Edit fields & checklists', move: 'Move between columns', finish: 'Move to the Done column', close: 'Close tasks (won’t do)', comment: 'Comment', delete: 'Delete tasks' };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${s / 60 | 0}m ago` : s < 86400 ? `${s / 3600 | 0}h ago` : `${s / 86400 | 0}d ago`; };
 const byId = id => S.B.tasks.find(t => t.id === id);
 const colName = id => S.B.columns.find(c => c.id === id)?.name ?? id;
-const lastCol = () => S.B.columns.at(-1)?.id;
+// Done = the column with role done (else the last one that isn't closed); closed = role closed. Both are finished, not open.
+const doneCol = () => S.B.columns.find(c => c.role === 'done') ?? S.B.columns.findLast(c => c.role !== 'closed');
+const finished = t => t.column === doneCol()?.id || S.B.columns.some(c => c.role === 'closed' && c.id === t.column);
 const ME = () => S.B.settings.me;
 const randColor = () => '#' + (Math.random() * 0xffffff | 0).toString(16).padStart(6, '0');
 // Generic glyphs (not brand logos) for members; Member.icon overrides the name-based default.
@@ -704,7 +709,7 @@ const GLYPH = {
 };
 const AUTO_ICON = { claude: 'claude', codex: 'codex', pi: 'pi', opencode: 'opencode', gemini: 'gemini', cursor: 'cursor', copilot: 'copilot' };
 const iconOf = (name, m) => (m?.icon && GLYPH[m.icon] ? m.icon : AUTO_ICON[name]) || (m?.agent ? 'bot' : 'user');
-const archived = t => S.B.settings.archiveDays > 0 && t.column === lastCol() && Date.now() - t.updated > S.B.settings.archiveDays * 864e5;
+const archived = t => S.B.settings.archiveDays > 0 && finished(t) && Date.now() - t.updated > S.B.settings.archiveDays * 864e5;
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
 const clone = x => JSON.parse(JSON.stringify(x));
 const without = (a, i) => a.filter((_, k) => k !== i);
@@ -862,7 +867,7 @@ Vue.createApp({
 
 // ---------- Command palette: search every project ----------
 const pal = $('#palette');
-const FILTERS = ['is:open', 'is:done', 'is:human', 'is:agent', 'is:overdue', '@', 'label:', 'col:', 'prio:', 'project:'];
+const FILTERS = ['is:open', 'is:done', 'is:closed', 'is:human', 'is:agent', 'is:overdue', '@', 'label:', 'col:', 'prio:', 'project:'];
 function openPalette(q = '') { S.palOpen = true; S.pal.q = q; S.pal.n++; }
 function closePalette() { S.palOpen = false; if (pal.contains(document.activeElement)) document.activeElement.blur(); } // else shortcuts land in the hidden input
 const hl = (text, words) => {
@@ -956,7 +961,7 @@ function sorted(list) {
 const TOOLS = [
   ['get_board()', 'Call first: columns, labels, members, priorities, permissions'], ['next_task()', 'What to work on next, with the reason'],
   ['start_task(id, note?)', 'Assign, move to in progress, post the plan'], ['update_progress(id, done?, add?, note?)', 'Tick or add checklist items, post a note'],
-  ['finish_task(id, summary, link?, done?)', 'Summary + link, move to review (or Done)'], ['my_tasks()', 'Your open tasks'],
+  ['finish_task(id, summary, link?, done?)', 'Summary + link, move to review (or Done)'], ['close_task(id, reason)', 'Won’t do: reason + move to Closed'], ['my_tasks()', 'Your open tasks'],
   ['list_tasks(column?, assignee?, label?, q?)', 'Filtered task list'], ['get_task(id)', 'Description, checklist, comments'],
   ['list_labels()', 'Labels with task counts'], ['create_task(title, …)', 'One task'], ['create_tasks(tasks)', 'Up to 50 tasks'],
   ['update_task(id, fields…)', 'Edit fields'], ['move_task(id, column, before?)', 'Move a task'], ['check_item(id, item, done)', 'Tick one checklist item'],
@@ -1008,7 +1013,7 @@ Vue.createApp({
     const lists = Vue.computed(() => Object.fromEntries(S.B.columns.map(c => [c.id, sorted(visible.value.filter(t => t.column === c.id))])));
     const totals = Vue.computed(() => { const n = {}; for (const t of S.B.tasks) if (!archived(t)) n[t.column] = (n[t.column] || 0) + 1; return n; });
     const total = col => totals.value[col] || 0;
-    const overdue = t => t.due && t.column !== lastCol() && t.due < new Date().toISOString().slice(0, 10);
+    const overdue = t => t.due && !finished(t) && t.due < new Date().toISOString().slice(0, 10);
     function onOver(e, col) { if (!dragId.value) return; e.preventDefault(); overCol.value = col; }
     async function onDrop(e, col) {
       if (!dragId.value) return;
@@ -1260,8 +1265,9 @@ Vue.createApp({
     const act = async fn => { try { await fn(); } catch { /* toast already shown */ } await refresh(); };
     const moveCol = (i, d) => act(() => { const c = clone(f.columns); [c[i], c[i + d]] = [c[i + d], c[i]]; return api('save_columns', c); });
     const delCol = i => act(() => api('save_columns', without(clone(f.columns), i)));
+    const setRole = i => { const r = f.columns[i].role; if (r) f.columns.forEach((c, j) => { if (j !== i && c.role === r) c.role = ''; }); saveCols(); }; // one done, one closed
     async function addCol() {
-      await act(() => api('save_columns', [...clone(f.columns), { id: 'c' + Date.now().toString(36), name: 'New column', color: '#7f848e' }]));
+      await act(() => api('save_columns', [...clone(f.columns), { id: 'c' + Date.now().toString(36), name: 'New column', color: '#7f848e', role: '' }]));
       await Vue.nextTick(); mainEl.value?.querySelector('#s-columns .row-i:last-child .grow')?.select();
     }
     const renameLabel = (from, to) => { to = to.trim(); return to && to !== from ? act(() => api('rename_label', { from, to })) : null; };
@@ -1298,7 +1304,7 @@ Vue.createApp({
       ARCHIVE: [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']],
       THEMES: [['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']], ACCENTS, PERMS, GLYPH,
       iconOf, ME, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
-      saveSettings, saveCols, saveMembers, saveLabels, moveCol, delCol, addCol, renameLabel, delLabel, addLabel,
+      saveSettings, saveCols, saveMembers, saveLabels, moveCol, delCol, setRole, addCol, renameLabel, delLabel, addLabel,
       delMember, addMember, copy, importFile, deleteAll };
   },
 }).use(shared).mount('#setApp');

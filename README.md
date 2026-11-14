@@ -76,7 +76,7 @@ Anything else: `http://127.0.0.1:7777/mcp?agent=<name>&project=<project>`.
 | ⚡ | **Live** | Every change streams to open browsers over SSE; Activity shows who did what, via UI or MCP |
 | 🗂️ | **Rich tasks** | Priorities, labels, assignees, due dates, checklists, comments, links, WIP limits |
 | 📝 | **Markdown** | Sanitized GitHub-flavoured markdown with highlighted code, mermaid diagrams and SVG |
-| 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` |
+| 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` (`is:done`, `is:closed`) |
 | 📁 | **Multi-project** | Each repo is a project in one shared database; task URLs like `/#my-app/KB-12` |
 | 🎨 | **Themes** | Warm light and dark themes, eleven accents |
 | ☁️ | **Optional sync** | Turso Cloud sync to share boards across machines; local-only by default |
@@ -121,6 +121,7 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `start_task` | Assign yourself, move to in progress and post your plan, in one call |
 | `update_progress` | Tick checklist items (by index or text), add items, post a note |
 | `finish_task` | Summary + PR link, move to review (or Done with `done: true` and the *finish* permission) |
+| `close_task` | Won't do (duplicate, obsolete, out of scope): posts the reason and moves the task to **Closed**. Needs the *close* permission, off by default |
 | `my_tasks` | Your open tasks, for resuming work |
 | `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
 | `get_task` | Full description, checklist and comments |

@@ -63,6 +63,17 @@ func TestPickNext(t *testing.T) {
 	if !strings.Contains(reason, "WIP limit") {
 		t.Errorf("full in-progress column should be mentioned: %q", reason)
 	}
+	// a closed task assigned to you is not "in progress"
+	withClosed := append([]store.Column{}, cols...)
+	withClosed = append(withClosed, store.Column{ID: "closed", Name: "Closed", Role: store.RoleClosed})
+	if best, _, _ := pickNext(withClosed, append(tasks, store.Task{ID: "KB-8", Column: "closed", Assignee: "claude"}), "claude"); best == nil || best.ID != "KB-4" {
+		t.Fatalf("closed task picked as in progress: %+v", best)
+	}
+	for i, want := range []string{"todo", "in_progress", "review", "done", "closed"} {
+		if got := colRole(withClosed, i); got != want {
+			t.Errorf("colRole(%s) = %q, want %q", withClosed[i].ID, got, want)
+		}
+	}
 	tasks = append(tasks, store.Task{ID: "KB-7", Column: "doing", Assignee: "claude"})
 	if best, reason, _ := pickNext(cols, tasks, "claude"); best == nil || best.ID != "KB-7" || !strings.Contains(reason, "already") {
 		t.Fatalf("own in-progress task first: %+v %q", best, reason)

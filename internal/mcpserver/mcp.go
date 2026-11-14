@@ -22,7 +22,7 @@ type ListInput struct {
 	Assignee        string `json:"assignee,omitempty" jsonschema:"member name; me = you; none = unassigned"`
 	Label           string `json:"label,omitempty" jsonschema:"label name (any case)"`
 	Query           string `json:"q,omitempty" jsonschema:"case-insensitive text search in id, title and description"`
-	IncludeArchived bool   `json:"include_archived,omitempty" jsonschema:"include auto-archived tasks from the last column"`
+	IncludeArchived bool   `json:"include_archived,omitempty" jsonschema:"include auto-archived done and closed tasks"`
 }
 
 type IDInput struct {
@@ -52,7 +52,12 @@ type FinishInput struct {
 	ID      string `json:"id" jsonschema:"task id"`
 	Summary string `json:"summary" jsonschema:"markdown: what changed and how it was verified"`
 	Link    string `json:"link,omitempty" jsonschema:"PR or commit URL (http/https)"`
-	Done    bool   `json:"done,omitempty" jsonschema:"move straight to the last column instead of review (needs the finish permission)"`
+	Done    bool   `json:"done,omitempty" jsonschema:"move straight to the done column instead of review (needs the finish permission)"`
+}
+
+type CloseInput struct {
+	ID     string `json:"id" jsonschema:"task id"`
+	Reason string `json:"reason" jsonschema:"markdown: why this won't be done (duplicate of KB-3, obsolete, out of scope…)"`
 }
 
 type CreateMany struct {
@@ -130,12 +135,16 @@ func Handler(d *store.DB, defProject, version, baseURL string) http.Handler {
 
 // ---------- forgiving input resolution (pure, tested) ----------
 
-// colRole guesses each column's place in the workflow from its id/name and position.
+// colRole is a column's place in the workflow: its explicit role (done, closed), else a guess from its id/name and position.
 func colRole(cols []store.Column, i int) string {
+	if cols[i].Role != "" {
+		return cols[i].Role
+	}
+	if d, ok := store.DoneColumn(cols); ok && d.ID == cols[i].ID {
+		return store.RoleDone
+	}
 	n := strings.ToLower(cols[i].ID + " " + cols[i].Name)
 	switch {
-	case i == len(cols)-1:
-		return "done"
 	case strings.Contains(n, "review") || strings.Contains(n, "qa") || strings.Contains(n, "test"):
 		return "review"
 	case strings.Contains(n, "progress") || strings.Contains(n, "doing") || strings.Contains(n, "wip") || strings.Contains(n, "active"):
@@ -237,17 +246,17 @@ func findItem(cl []store.Check, item string) (int, error) {
 var prioRank = map[string]int{"urgent": 0, "high": 1, "medium": 2, "low": 3}
 
 // pickNext chooses what an agent should work on: its own in-progress task first, else the
-// most urgent unassigned (or self-assigned) task in the todo column. Human-only and done work is skipped.
+// most urgent unassigned (or self-assigned) task in the todo column. Human-only, done and closed work is skipped.
 func pickNext(cols []store.Column, tasks []store.Task, agent string) (best *store.Task, reason string, alts []store.Task) {
 	if len(cols) == 0 {
 		return nil, "board has no columns", nil
 	}
 	todo, _ := colByRole(cols, "todo")
 	doing, hasDoing := colByRole(cols, "in_progress")
-	last := cols[len(cols)-1].ID
+	fin := store.Finished(cols)
 	for i := range tasks {
 		t := &tasks[i]
-		if !t.Human && t.Assignee == agent && t.Column != last && t.Column != todo.ID && (!hasDoing || t.Column == doing.ID) {
+		if !t.Human && t.Assignee == agent && !fin[t.Column] && t.Column != todo.ID && (!hasDoing || t.Column == doing.ID) {
 			return t, "you already have this in progress; finish it before starting something new", nil
 		}
 	}
@@ -323,6 +332,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			"2. start_task when you begin: it assigns you, moves the task to in progress and posts your plan.\n" +
 			"3. update_progress as you go: tick checklist items, post short notes about decisions and blockers.\n" +
 			"4. finish_task when done: summary of what changed and how it was verified, plus the PR link; it goes to review.\n" +
+			"A task that should not be done at all (duplicate, obsolete, won't fix) is closed with close_task and a reason, not finished.\n" +
 			"Every result includes the task url; share it with the user. Columns and labels accept names in any case; ids accept 12 or KB-12. " +
 			"Tasks marked human-only are not yours: they are hidden from list_tasks and read-only. If a call returns permission denied, don't retry; tell the user.",
 	})
@@ -412,12 +422,12 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if err != nil {
 				return nil, nil, err
 			}
-			last := b.Columns[len(b.Columns)-1].ID
+			fin := store.Finished(b.Columns)
 			open := 0
 			count := map[string]int{}
 			for _, t := range tasks {
 				count[t.Column]++
-				if t.Assignee == agent && t.Column != last {
+				if t.Assignee == agent && !fin[t.Column] {
 					open++
 				}
 			}
@@ -493,18 +503,18 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		if err != nil {
 			return "", err
 		}
-		last := b.Columns[len(b.Columns)-1].ID
+		fin := store.Finished(b.Columns)
 		q := strings.ToLower(in.Query)
 		var lines []string
 		hidden := 0
 		for _, c := range b.Columns { // column order, then position
 			for _, t := range tasks {
 				if t.Column != c.ID || (in.Column != "" && t.Column != in.Column) ||
-					(mine && t.Column == last) ||
+					(mine && fin[t.Column]) ||
 					(in.Assignee != "" && !(t.Assignee == in.Assignee || strings.EqualFold(in.Assignee, "none") && t.Assignee == "")) ||
 					(in.Label != "" && !slices.Contains(t.Labels, in.Label)) ||
 					(q != "" && !strings.Contains(strings.ToLower(t.ID+" "+t.Title+" "+t.Description), q)) ||
-					(!in.IncludeArchived && store.Archived(t, b.Settings, last)) {
+					(!in.IncludeArchived && store.Archived(t, b.Settings, fin)) {
 					continue
 				}
 				if t.Human {
@@ -533,7 +543,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		})
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "my_tasks", Annotations: ro,
-		Description: "Your open tasks (assigned to you, not in the last column). Check this when resuming work."},
+		Description: "Your open tasks (assigned to you, not done or closed). Check this when resuming work."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
 			s.Touch(agent)
 			out, err := listTasks(ListInput{}, true)
@@ -739,8 +749,11 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 				return nil, nil, err
 			}
 			perm := "move"
-			if in.Column == b.Columns[len(b.Columns)-1].ID {
+			switch colRole(b.Columns, slices.IndexFunc(b.Columns, func(c store.Column) bool { return c.ID == in.Column })) {
+			case store.RoleDone:
 				perm = "finish"
+			case store.RoleClosed:
+				perm = "close"
 			}
 			if err := guard(b, in.ID, perm); err != nil {
 				return nil, nil, err
@@ -852,7 +865,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "finish_task",
 		Description: "Hand finished work back: posts your summary (what changed, how it was verified), sets the PR link, and moves the task to review " +
-			"(or to the last column when done=true and you have the finish permission)."},
+			"(or to the done column when done=true and you have the finish permission)."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in FinishInput) (*mcp.CallToolResult, any, error) {
 			b, err := meta()
 			if err != nil {
@@ -865,7 +878,8 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			target, ok := colByRole(b.Columns, "review")
 			perms := []string{"move", "comment"}
 			if in.Done || !ok {
-				target, perms = b.Columns[len(b.Columns)-1], []string{"finish", "comment"}
+				target, _ = store.DoneColumn(b.Columns)
+				perms = []string{"finish", "comment"}
 			}
 			if in.Link != "" {
 				perms = append(perms, "edit")
@@ -895,6 +909,41 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 			t.URL = link + t.ID
 			return text(taskStatus("Finished", t, b)), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "close_task",
+		Description: "Close a task that won't be done (duplicate, obsolete, out of scope, won't fix): posts your reason as a comment and moves it " +
+			"to the closed column. Not for finished work; use finish_task for that. Needs the close permission."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in CloseInput) (*mcp.CallToolResult, any, error) {
+			b, err := meta()
+			if err != nil {
+				return nil, nil, err
+			}
+			in.ID = id(b, in.ID)
+			if strings.TrimSpace(in.Reason) == "" {
+				return nil, nil, errors.New("reason is required: why this task won't be done")
+			}
+			target, ok := store.ClosedColumn(b.Columns)
+			if !ok {
+				return nil, nil, errors.New("this board has no closed column; a human can set a column's role to Closed in Settings → Columns")
+			}
+			if err := guard(b, in.ID, "close", "comment"); err != nil {
+				return nil, nil, err
+			}
+			t, err := s.Task(in.ID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if _, err := s.AddComment(agent, "mcp", store.CommentInput{ID: t.ID, Text: "Closed: " + in.Reason}); err != nil {
+				return nil, nil, err
+			}
+			if t.Column != target.ID {
+				if t, err = s.MoveTask(agent, "mcp", store.MoveInput{ID: t.ID, Column: target.ID}); err != nil {
+					return nil, nil, err
+				}
+			}
+			t.URL = link + t.ID
+			return text(taskStatus("Closed", t, b)), nil, nil
 		})
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "add_comment", Description: "Add a markdown comment to a task: progress notes, questions for the user, findings. Code blocks, mermaid and svg render in the UI."},

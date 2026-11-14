@@ -16,6 +16,8 @@ For any non-trivial coding work, keep the board in step with what you are doing.
 3. **`update_progress id done note add`**: tick checklist items (by index or text), add new ones, post a short note on decisions or blockers.
 4. **`finish_task id summary link`**: what changed and how it was verified, plus the PR link; the task goes to review for a human. Use `done: true` only if `get_board` lists `+finish` under permissions.
 
+A task that should not be done at all (duplicate, obsolete, out of scope, won't fix) is **closed**, not finished: `close_task id reason` posts the reason and moves it to the closed column (`role=closed` in `get_board`). It needs `+close`; without it, comment with your reasoning and leave the decision to a human. Done and closed tasks are both no longer open.
+
 `get_board` once per session tells you the columns (with roles and WIP limits), labels, members and your permissions. Inputs are forgiving: columns and labels by name in any case, ids as `12` or `KB-12`, assignee `me`. If a call fails, the error lists the valid values; fix and retry once.
 
 Write tools reply with a one-line status, not the whole task. Call `get_task` only when you need the description or comments; `list_tasks` is one line per task.

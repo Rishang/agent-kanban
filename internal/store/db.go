@@ -61,7 +61,7 @@ var schema = []string{
 	`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, name TEXT NOT NULL, dir TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS columns (project TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL,
-		wip INTEGER NOT NULL DEFAULT 0, pos INTEGER NOT NULL, PRIMARY KEY (project, id))`,
+		wip INTEGER NOT NULL DEFAULT 0, pos INTEGER NOT NULL, role TEXT NOT NULL DEFAULT '', PRIMARY KEY (project, id))`,
 	`CREATE TABLE IF NOT EXISTS members (name TEXT PRIMARY KEY, color TEXT NOT NULL, agent INTEGER NOT NULL DEFAULT 0,
 		pos INTEGER NOT NULL DEFAULT 0, icon TEXT NOT NULL DEFAULT '')`,
 	`CREATE TABLE IF NOT EXISTS labels (project TEXT NOT NULL, name TEXT NOT NULL, color TEXT NOT NULL, pos INTEGER NOT NULL DEFAULT 0,
@@ -106,11 +106,88 @@ func Open(path, me string, sc *SyncConfig) (*DB, error) {
 			return nil, fmt.Errorf("open %s: %w", path, err)
 		}
 	}
+	if err := d.migrate(); err != nil {
+		d.db.Close()
+		return nil, fmt.Errorf("upgrade %s: %w", path, err)
+	}
 	if err := d.ensureMembers(me); err != nil {
 		d.db.Close()
 		return nil, err
 	}
 	return d, nil
+}
+
+// migrate upgrades databases created by older versions. Each step is idempotent.
+func (d *DB) migrate() error {
+	// columns.role: databases from before column roles have no such column.
+	if rows, err := d.db.Query(`SELECT role FROM columns LIMIT 0`); err == nil {
+		rows.Close()
+	} else if _, err := d.db.Exec(`ALTER TABLE columns ADD COLUMN role TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	return d.addColumnRoles()
+}
+
+// addColumnRoles runs once per database: on every board without roles, the last column becomes the done
+// column (what it already meant) and a Closed column is appended for tasks that won't be done.
+func (d *DB) addColumnRoles() error {
+	const key = "migrated:column-roles"
+	var n int
+	if err := d.db.QueryRow(`SELECT count(*) FROM meta WHERE key=?`, key).Scan(&n); err != nil || n > 0 {
+		return err
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	ps, err := tx.Query(`SELECT id FROM projects`)
+	if err != nil {
+		return err
+	}
+	var pids []string
+	for ps.Next() {
+		var id string
+		if err := ps.Scan(&id); err != nil {
+			ps.Close()
+			return err
+		}
+		pids = append(pids, id)
+	}
+	ps.Close()
+	for _, pid := range pids {
+		cols, err := getColumns(tx, pid)
+		if err != nil {
+			return err
+		}
+		if len(cols) == 0 || slices.ContainsFunc(cols, func(c Column) bool { return c.Role != "" }) {
+			continue
+		}
+		if _, err := tx.Exec(`UPDATE columns SET role=? WHERE project=? AND id=?`, RoleDone, pid, cols[len(cols)-1].ID); err != nil {
+			return err
+		}
+		id := RoleClosed
+		for i := 2; slices.ContainsFunc(cols, func(c Column) bool { return c.ID == id }); i++ {
+			id = fmt.Sprintf("%s-%d", RoleClosed, i)
+		}
+		if err := insertColumn(tx, pid, closedColumn(id), len(cols)); err != nil {
+			return err
+		}
+	}
+	if err := putMeta(tx, key, 1); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	d.nudgeSync()
+	return nil
+}
+
+func closedColumn(id string) Column {
+	return Column{ID: id, Name: "Closed", Color: "#7f848e", Role: RoleClosed}
 }
 
 func (d *DB) Close() error {
@@ -344,9 +421,10 @@ func (d *DB) AddProject(name, dir string) (Project, error) {
 }
 
 func seedProject(tx *sql.Tx, pid string) error {
-	cols := []Column{{"todo", "Todo", "#61afef", 0}, {"doing", "In Progress", "#d19a66", 3}, {"review", "Review", "#e5c07b", 0}, {"done", "Done", "#98c379", 0}}
+	cols := []Column{{ID: "todo", Name: "Todo", Color: "#61afef"}, {ID: "doing", Name: "In Progress", Color: "#d19a66", WIP: 3},
+		{ID: "review", Name: "Review", Color: "#e5c07b"}, {ID: "done", Name: "Done", Color: "#98c379", Role: RoleDone}, closedColumn(RoleClosed)}
 	for i, c := range cols {
-		if _, err := tx.Exec(`INSERT INTO columns VALUES (?,?,?,?,?,?)`, pid, c.ID, c.Name, c.Color, c.WIP, i); err != nil {
+		if err := insertColumn(tx, pid, c, i); err != nil {
 			return err
 		}
 	}
@@ -356,7 +434,7 @@ func seedProject(tx *sql.Tx, pid string) error {
 		}
 	}
 	st := Settings{Prefix: "KB", DefaultCol: "todo",
-		Perms: map[string]bool{"create": true, "edit": true, "move": true, "finish": false, "comment": true, "delete": false}}
+		Perms: map[string]bool{"create": true, "edit": true, "move": true, "finish": false, "close": false, "comment": true, "delete": false}}
 	return putMeta(tx, "settings:"+pid, st)
 }
 
@@ -462,7 +540,7 @@ type query struct {
 	label, who, col, prio, project, status []string
 }
 
-// parseQuery understands label:x  #x  @who  assignee:x  col:x  prio:x  p:x  project:x  is:open|done|human|agent
+// parseQuery understands label:x  #x  @who  assignee:x  col:x  prio:x  p:x  project:x  is:open|done|closed|human|agent|unassigned|overdue
 func parseQuery(q string) query {
 	var out query
 	for _, f := range strings.Fields(strings.ToLower(q)) {
@@ -542,10 +620,9 @@ func (d *DB) Search(raw string, limit int) ([]Hit, error) {
 		if err != nil {
 			return nil, err
 		}
-		last := ""
-		if len(cols) > 0 {
-			last = cols[len(cols)-1].ID
-		}
+		fin := Finished(cols)
+		done, _ := DoneColumn(cols)
+		closed, _ := ClosedColumn(cols)
 		colName := map[string]string{}
 		for _, c := range cols {
 			colName[c.ID] = c.Name
@@ -562,9 +639,11 @@ func (d *DB) Search(raw string, limit int) ([]Hit, error) {
 				!anyPrefix(q.status, func(v string) bool {
 					switch v {
 					case "open":
-						return t.Column != last
-					case "done", "closed":
-						return t.Column == last
+						return !fin[t.Column]
+					case "done":
+						return t.Column == done.ID
+					case "closed":
+						return closed.ID != "" && t.Column == closed.ID
 					case "human":
 						return t.Human
 					case "agent":
@@ -572,7 +651,7 @@ func (d *DB) Search(raw string, limit int) ([]Hit, error) {
 					case "unassigned":
 						return t.Assignee == ""
 					case "overdue":
-						return t.Due != "" && t.Column != last && t.Due < time.Now().Format("2006-01-02")
+						return t.Due != "" && !fin[t.Column] && t.Due < time.Now().Format("2006-01-02")
 					}
 					return false
 				}) {
@@ -620,7 +699,7 @@ func (d *DB) Search(raw string, limit int) ([]Hit, error) {
 			if !matched {
 				continue
 			}
-			if t.Column != last {
+			if !fin[t.Column] {
 				h.score++ // open work first on ties
 			}
 			hits = append(hits, h)
