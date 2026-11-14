@@ -613,12 +613,12 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
           <select class="inp" v-model.number="f.settings.archiveDays" @change="saveSettings"><option v-for="[v, l] in ARCHIVE" :key="v" :value="v">{{ l }}</option></select></label>
       </section>
 
-      <section class="s-sec" id="s-columns"><h3>Columns</h3><p>Rename, recolor, set WIP limits (empty = no limit), reorder. Columns with tasks can't be deleted. Role <b>Done</b> holds finished work, <b>Closed</b> holds tasks that won't be done; neither counts as open.</p>
+      <section class="s-sec" id="s-columns"><h3>Columns</h3><p>Rename, recolor, set WIP limits (empty = no limit), reorder. Columns with tasks can't be deleted. Role <b>Done</b> holds finished work, <b>Not planned</b> holds tasks that won't be done; neither counts as open.</p>
         <div class="list"><div v-for="(c, i) in f.columns" :key="c.id" class="row-i">
           <input type="color" v-model="c.color" aria-label="Column color" @input="saveCols">
           <input class="inp grow" v-model="c.name" aria-label="Column name" @input="saveCols">
           <input class="inp num" type="number" min="1" placeholder="WIP" :value="c.wip || ''" aria-label="WIP limit" @input="c.wip = Math.max(0, +$event.target.value || 0); saveCols()">
-          <select class="inp role" v-model="c.role" aria-label="Column role" @change="setRole(i)"><option value="">No role</option><option value="done">Done</option><option value="closed">Closed</option></select>
+          <select class="inp role" v-model="c.role" aria-label="Column role" @change="setRole(i)"><option value="">No role</option><option value="done">Done</option><option value="closed">Not planned</option></select>
           <span class="muted">{{ count(c.id) }} task{{ count(c.id) === 1 ? '' : 's' }}</span>
           <button class="icon-btn" :disabled="i === 0" aria-label="Move up" @click="moveCol(i, -1)">↑</button>
           <button class="icon-btn" :disabled="i === f.columns.length - 1" aria-label="Move down" @click="moveCol(i, 1)">↓</button>
@@ -1004,7 +1004,7 @@ function sorted(list) {
 const TOOLS = [
   ['get_board()', 'Call first: columns, labels, members, priorities, permissions'], ['next_task()', 'What to work on next, with the reason'],
   ['start_task(id, note?)', 'Assign, move to in progress, post the plan'], ['update_progress(id, done?, add?, note?)', 'Tick or add checklist items, post a note'],
-  ['finish_task(id, summary, link?, done?)', 'Summary + link, move to review (or Done)'], ['close_task(id, reason)', 'Won’t do: reason + move to Closed'], ['my_tasks()', 'Your open tasks'],
+  ['finish_task(id, summary, link?, done?)', 'Summary + link, move to review (or Done)'], ['close_task(id, reason)', 'Won’t do: reason + move to Not planned'], ['my_tasks()', 'Your open tasks'],
   ['list_tasks(column?, assignee?, label?, q?)', 'Filtered task list'], ['get_task(id)', 'Description, checklist, comments'],
   ['list_labels()', 'Labels with task counts'], ['create_task(title, …)', 'One task'], ['create_tasks(tasks)', 'Up to 50 tasks'],
   ['update_task(id, fields…)', 'Edit fields'], ['move_task(id, column, before?)', 'Move a task'], ['check_item(id, item, done)', 'Tick one checklist item'],

@@ -923,7 +923,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "close_task",
 		Description: "Close a task that won't be done (duplicate, obsolete, out of scope, won't fix): posts your reason as a comment and moves it " +
-			"to the closed column. Not for finished work; use finish_task for that. Needs the close permission."},
+			"to the closed column (Not planned on new boards). Not for finished work; use finish_task for that. Needs the close permission."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in CloseInput) (*mcp.CallToolResult, any, error) {
 			b, err := meta()
 			if err != nil {
@@ -935,7 +935,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 			target, ok := store.ClosedColumn(b.Columns)
 			if !ok {
-				return nil, nil, errors.New("this board has no closed column; a human can set a column's role to Closed in Settings → Columns")
+				return nil, nil, errors.New("this board has no closed column; a human can set a column's role to Not planned in Settings → Columns")
 			}
 			if err := guard(b, in.ID, "close", "comment"); err != nil {
 				return nil, nil, err
@@ -944,7 +944,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if err != nil {
 				return nil, nil, err
 			}
-			if _, err := s.AddComment(agent, "mcp", store.CommentInput{ID: t.ID, Text: "Closed: " + in.Reason}); err != nil {
+			if _, err := s.AddComment(agent, "mcp", store.CommentInput{ID: t.ID, Text: "Not planned: " + in.Reason}); err != nil {
 				return nil, nil, err
 			}
 			if t.Column != target.ID {
