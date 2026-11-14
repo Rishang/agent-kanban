@@ -105,7 +105,8 @@ header { display: flex; align-items: center; gap: 10px; padding: 10px 20px; back
 .btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 7px 12px; font-weight: 600; cursor: pointer; }
 .icon-btn { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 4px 6px; border-radius: 6px; }
 .icon-btn:hover { background: var(--hover); color: var(--text); }
-.d-top .icon-btn { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; font: 18px/1 Inter, system-ui, sans-serif; border-radius: 8px; }
+.d-top .icon-btn { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border-radius: 8px; }
+.icon-btn > .ico { display: block; }
 .row-i .icon-btn, .check .icon-btn { min-width: 30px; height: 30px; font-size: 15px; }
 
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translate(-50%, 20px); background: var(--p-urgent); color: #fff; padding: 10px 16px; border-radius: 10px;
@@ -373,7 +374,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 </nav>
 <aside class="projects" id="projects" aria-label="Projects"><div id="projApp" style="display:contents"></div></aside>
 <script type="text/x-template" id="tpl-projects">
-  <h3>Projects <button class="icon-btn" aria-label="Close" @click="toggleProjects(false)">✕</button></h3>
+  <h3>Projects <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="toggleProjects(false)"><icon name="close" /></button></h3>
   <div class="plist">
     <div v-for="p in S.projects" :key="p.id" class="pitem" :class="{ on: p.id === S.proj }" :title="p.dir || p.id" @click="renaming === p.id || switchProject(p.id)">
       <span class="pi" :style="{ background: projColor(p.id) }">{{ p.name.slice(0, 1).toUpperCase() }}</span>
@@ -513,9 +514,9 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
   <div class="d-top">
     <span>{{ t?.id }}</span><span class="live" :class="{ show: S.live }">● updated by agent</span>
     <span class="spacer"></span>
-    <button class="icon-btn" title="Copy link to this task" aria-label="Copy link" @click="copyLink">{{ copied ? '✓' : '🔗' }}</button>
-    <button class="icon-btn" title="Expand / collapse" aria-label="Expand" @click="toggleWide">⤢</button>
-    <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="closeTask">✕</button>
+    <button class="icon-btn" :title="copied ? 'Copied' : 'Copy link to this task'" aria-label="Copy link" @click="copyLink"><icon :name="copied ? 'check' : 'link'" /></button>
+    <button class="icon-btn" :title="wide ? 'Collapse' : 'Expand'" :aria-label="wide ? 'Collapse' : 'Expand'" @click="toggleWide"><icon :name="wide ? 'collapse' : 'expand'" /></button>
+    <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="closeTask"><icon name="close" /></button>
   </div>
   <div class="d-body" v-if="t" @keydown="onKey">
     <div class="d-main">
@@ -557,7 +558,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
         <option v-for="p in S.B.priorities" :key="p" :value="p">{{ p[0].toUpperCase() + p.slice(1) }}</option></select></label>
       <label class="prop"><span>Assignee</span><select :value="t.assignee || ''" @change="patch({ assignee: $event.target.value })">
         <option value="">Unassigned</option>
-        <option v-for="m in S.B.members.filter(m => !(t.human && m.agent))" :key="m.name" :value="m.name">{{ m.name + (m.agent ? ' (agent)' : '') }}</option></select></label>
+        <option v-for="m in assignable(t, t.assignee)" :key="m.name" :value="m.name">{{ m.name + (m.agent ? (isLive(m) ? ' (agent)' : ' (agent, offline)') : '') }}</option></select></label>
       <label class="prop"><span>Due date</span><input type="date" :value="t.due || ''" @change="patch({ due: $event.target.value })"></label>
       <div class="prop"><span>Link</span><div class="linkrow"><input type="url" :value="t.link || ''" placeholder="https://… PR, issue, doc"
           @change="patch({ link: $event.target.value.trim() })" @keydown.esc.stop="$event.target.value = t.link || ''; $event.target.blur()">
@@ -577,7 +578,7 @@ code { font: 12px 'JetBrains Mono', monospace; background: var(--col); padding: 
 <!-- Settings (Vue). Edits go to a local copy that only refreshes while you're not typing and nothing is pending. -->
 <script type="text/x-template" id="tpl-settings">
   <div class="d-top"><b style="font: 600 15px Inter, sans-serif; color: var(--text)">Settings</b><span class="spacer"></span>
-    <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="closeSettings">✕</button></div>
+    <button class="icon-btn" title="Close (Esc)" aria-label="Close" @click="closeSettings"><icon name="close" /></button></div>
   <div class="s-body" v-if="f.settings">
     <nav class="s-nav"><button v-for="[id, name] in NAV" :key="id" :data-go="id" :class="{ on: navOn === id }" @click="go(id)">{{ name }}</button></nav>
     <div class="s-main" ref="mainEl">
@@ -709,6 +710,12 @@ const GLYPH = {
 };
 const AUTO_ICON = { claude: 'claude', codex: 'codex', pi: 'pi', opencode: 'opencode', gemini: 'gemini', cursor: 'cursor', copilot: 'copilot' };
 const iconOf = (name, m) => (m?.icon && GLYPH[m.icon] ? m.icon : AUTO_ICON[name]) || (m?.agent ? 'bot' : 'user');
+// Connected = made an MCP call in the last 5 minutes (MCP over HTTP has no persistent connection to watch).
+const now = Vue.ref(Date.now());
+setInterval(() => now.value = Date.now(), 30e3); // keeps "2m ago" and connected agents fresh
+const isLive = m => m.agent && S.B.seen[m.name] > 0 && now.value - S.B.seen[m.name] < 5 * 60e3;
+// Assignable: humans, plus agents that are connected. The current assignee always stays in the list.
+const assignable = (t, cur) => S.B.members.filter(m => m.name === cur || (!m.agent || (!t?.human && isLive(m))));
 const archived = t => S.B.settings.archiveDays > 0 && finished(t) && Date.now() - t.updated > S.B.settings.archiveDays * 864e5;
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} } };
 const clone = x => JSON.parse(JSON.stringify(x));
@@ -806,7 +813,21 @@ async function deleteProject(pid) {
   if (pid === S.proj) switchProject(S.projects[0]?.id);
 }
 
-// ---------- Shared by every Vue app: template globals, <avatar>, v-md ----------
+// ---------- Shared by every Vue app: template globals, <icon>, <avatar>, v-md ----------
+// Stroke icons in the same style as the rail (24px grid, 2px stroke, currentColor).
+const ICONS = {
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
+  collapse: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+};
+const Icon = {
+  props: { name: String, size: { type: Number, default: 16 } },
+  template: `<svg class="ico" :width="size" :height="size" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="ICONS[name]"></svg>`,
+  setup: () => ({ ICONS }),
+};
 const Avatar = {
   props: { who: String },
   computed: { m() { return member(this.who); }, glyph() { return GLYPH[iconOf(this.who, this.m)]; } },
@@ -819,8 +840,8 @@ const vMd = {
   updated(el, b) { if (el._md !== b.value) { el._md = b.value; renderMd(el, b.value); } },
 };
 const shared = { install(app) {
-  Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without });
-  app.component('avatar', Avatar).directive('md', vMd);
+  Object.assign(app.config.globalProperties, { S, member, labelColor, PRIO_COLOR, ago, projColor, without, isLive, assignable });
+  app.component('avatar', Avatar).component('icon', Icon).directive('md', vMd);
 } };
 
 // ---------- Header (Vue): project name (click to rename), live status, board filters ----------
@@ -971,15 +992,13 @@ Vue.createApp({
   template: '#tpl-side',
   setup() {
     const tab = Vue.ref('activity'), mode = Vue.ref(store.get('kanban:feed') === 'task' ? 'task' : 'time');
-    const collapsed = Vue.reactive(new Set()), now = Vue.ref(Date.now());
-    setInterval(() => now.value = Date.now(), 30e3); // keeps "2m ago" and connected agents fresh
+    const collapsed = Vue.reactive(new Set());
     const since = t => (now.value, ago(t));
     const setMode = m => { mode.value = m; store.set('kanban:feed', m === 'task' ? 'task' : null); };
     const toggle = k => collapsed.has(k) ? collapsed.delete(k) : collapsed.add(k);
     const taskIds = Vue.computed(() => new Set(S.B.tasks.map(t => t.id)));
     const openable = id => id && taskIds.value.has(id);
-    // Connected = made an MCP call in the last 5 minutes (MCP over HTTP has no persistent connection to watch).
-    const live = Vue.computed(() => S.B.members.filter(m => m.agent && S.B.seen[m.name] && now.value - S.B.seen[m.name] < 5 * 60e3));
+    const live = Vue.computed(() => S.B.members.filter(isLive));
     const groups = Vue.computed(() => {
       const by = new Map(); // task id → events, newest first; insertion order = most recently active first
       for (const e of S.B.events) { const k = e.taskId || ''; if (!by.has(k)) by.set(k, []); by.get(k).push(e); }
@@ -1196,9 +1215,11 @@ Vue.createApp({
       await navigator.clipboard?.writeText(location.origin + location.pathname + hashOf(S.proj, t.value.id)).catch(() => {});
       copied.value = true; setTimeout(() => copied.value = false, 1200);
     }
+    const wide = Vue.ref(false);
     function toggleWide() {
-      if (drawer.style.width === '100vw') drawer.style.width = drawer.dataset.prev || '';
+      if (wide.value) drawer.style.width = drawer.dataset.prev || '';
       else { drawer.dataset.prev = drawer.style.width; drawer.style.width = '100vw'; }
+      wide.value = !wide.value;
     }
     async function deleteTask() {
       if (!confirm(`Delete ${t.value.id}? This cannot be undone.`)) return;
@@ -1207,7 +1228,7 @@ Vue.createApp({
     }
     return { member, t, title, desc, editingDesc, ckText, cmText, labelText, copied, titleEl, descEl, done, freeLabels,
       colName, closeTask, patch, onTitle, endTitle, cancelTitle, editDesc, onDesc, finishDesc, onDescClick, onKey,
-      toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, deleteTask };
+      toggleCheck, removeCheck, addCheck, addLabel, sendComment, move, setHuman, copyLink, toggleWide, wide, deleteTask };
   },
 }).use(shared).mount('#dApp');
 
