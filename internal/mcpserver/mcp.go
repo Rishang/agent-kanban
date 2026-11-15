@@ -264,15 +264,19 @@ func pickNext(cols []store.Column, tasks []store.Task, agent string) (best *stor
 	todo, _ := colByRole(cols, "todo")
 	doing, hasDoing := colByRole(cols, "in_progress")
 	fin := store.Finished(cols)
+	blocked := openSubs(cols, tasks) // a parent waits for its sub-tasks; work on those instead
 	for i := range tasks {
 		t := &tasks[i]
+		if len(blocked[t.ID]) > 0 {
+			continue
+		}
 		if !t.Human && t.Assignee == agent && !fin[t.Column] && t.Column != todo.ID && (!hasDoing || t.Column == doing.ID) {
 			return t, "you already have this in progress; finish it before starting something new", nil
 		}
 	}
 	var cand []store.Task
 	for _, t := range tasks {
-		if !t.Human && t.Column == todo.ID && (t.Assignee == "" || t.Assignee == agent) {
+		if !t.Human && t.Column == todo.ID && (t.Assignee == "" || t.Assignee == agent) && len(blocked[t.ID]) == 0 {
 			cand = append(cand, t)
 		}
 	}
@@ -331,6 +335,37 @@ func checkDone(cl []store.Check) string {
 	return fmt.Sprintf("%d/%d", n, len(cl))
 }
 
+// openSubs maps each parent id to its sub-tasks that are not done or closed.
+func openSubs(cols []store.Column, tasks []store.Task) map[string][]store.Task {
+	fin := store.Finished(cols)
+	out := map[string][]store.Task{}
+	for _, t := range tasks {
+		if t.Parent != "" && !fin[t.Column] {
+			out[t.Parent] = append(out[t.Parent], t)
+		}
+	}
+	return out
+}
+
+// subProgress maps each parent id to "done/total" over its sub-tasks.
+func subProgress(cols []store.Column, tasks []store.Task) map[string]string {
+	fin := store.Finished(cols)
+	done, total := map[string]int{}, map[string]int{}
+	for _, t := range tasks {
+		if t.Parent != "" {
+			total[t.Parent]++
+			if fin[t.Column] {
+				done[t.Parent]++
+			}
+		}
+	}
+	out := map[string]string{}
+	for p, n := range total {
+		out[p] = fmt.Sprintf("%d/%d", done[p], n)
+	}
+	return out
+}
+
 // ---------- server ----------
 
 func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
@@ -343,6 +378,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			"3. update_progress as you go: tick checklist items, post short notes about decisions and blockers.\n" +
 			"4. finish_task when done: summary of what changed and how it was verified, plus the PR link; it goes to review.\n" +
 			"A task that should not be done at all (duplicate, obsolete, won't fix) is closed with close_task and a reason, not finished.\n" +
+			"Tasks can have sub-tasks one level deep (parent on create_task/update_task). Work on the sub-tasks; a parent can't be finished while any is open.\n" +
 			"Every result includes the task url; share it with the user. Columns and labels accept names in any case; ids accept 12 or KB-12. " +
 			"Tasks marked human-only are not yours: they are hidden from list_tasks and read-only. If a call returns permission denied, don't retry; tell the user.",
 	})
@@ -354,6 +390,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 	}
 	line := func(t store.Task, comments int) string {
 		st := fmt.Sprintf("%s [%s] %s %q", t.ID, t.Column, t.Priority, t.Title)
+		if t.Parent != "" {
+			st += " ↳" + t.Parent
+		}
 		if t.Assignee != "" {
 			st += " @" + t.Assignee
 		}
@@ -412,6 +451,26 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 		}
 		return nil
+	}
+	// noOpenSubs refuses to finish a parent while any of its sub-tasks is still open, listing them.
+	noOpenSubs := func(taskID string) error {
+		b, err := meta()
+		if err != nil {
+			return err
+		}
+		tasks, err := s.Tasks()
+		if err != nil {
+			return err
+		}
+		open := openSubs(b.Columns, tasks)[taskID]
+		if len(open) == 0 {
+			return nil
+		}
+		ids := make([]string, len(open))
+		for i, t := range open {
+			ids[i] = fmt.Sprintf("%s [%s]", t.ID, t.Column)
+		}
+		return fmt.Errorf("%s has %d open sub-task(s): %s. Finish or close them first", taskID, len(open), strings.Join(ids, ", "))
 	}
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true}
 
@@ -514,6 +573,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			return "", err
 		}
 		fin := store.Finished(b.Columns)
+		subs := subProgress(b.Columns, tasks)
 		q := strings.ToLower(in.Query)
 		var lines []string
 		hidden := 0
@@ -531,7 +591,11 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 					hidden++
 					continue
 				}
-				lines = append(lines, line(t, ncomments[t.ID]))
+				l := line(t, ncomments[t.ID])
+				if p := subs[t.ID]; p != "" {
+					l += " {sub-tasks " + p + "}"
+				}
+				lines = append(lines, l)
 			}
 		}
 		out := fmt.Sprintf("%d task(s); %s\n%s", len(lines), urlNote, strings.Join(lines, "\n"))
@@ -603,6 +667,24 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if t.Link != "" {
 				o.WriteString("\nlink: " + t.Link)
 			}
+			all, err := s.Tasks()
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, p := range all {
+				if p.ID == t.Parent {
+					fmt.Fprintf(&o, "\nparent: %s %q", p.ID, p.Title)
+				}
+			}
+			var kids []string
+			for _, k := range all {
+				if k.Parent == t.ID {
+					kids = append(kids, "\n- "+line(k, 0))
+				}
+			}
+			if len(kids) > 0 {
+				fmt.Fprintf(&o, "\nsub-tasks (%s):%s", subProgress(b.Columns, all)[t.ID], strings.Join(kids, ""))
+			}
 			for i, c := range t.Checklist {
 				mark := " "
 				if c.Done {
@@ -630,6 +712,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		}
 		in.Labels = resolveLabels(b.Labels, in.Labels)
 		in.Priority = strings.ToLower(strings.TrimSpace(in.Priority))
+		if strings.TrimSpace(in.Parent) != "" {
+			in.Parent = id(b, in.Parent)
+		}
 		if strings.EqualFold(in.Assignee, "me") {
 			in.Assignee = agent
 		}
@@ -638,7 +723,8 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "create_task", InputSchema: agentSchema[store.TaskInput](),
 		Description: "Create a task. Search first (list_tasks q=…) to avoid duplicates. Column and labels accept names in any case; assignee accepts me. " +
-			"Write the description in markdown: goal, approach, acceptance criteria; add a checklist for multi-step work."},
+			"Write the description in markdown: goal, approach, acceptance criteria; add a checklist for multi-step work. " +
+			"Pass parent to make it a sub-task of a top-level task (one level deep)."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in store.TaskInput) (*mcp.CallToolResult, any, error) {
 			b, err := meta()
 			if err != nil {
@@ -708,6 +794,10 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if in.Assignee != nil && strings.EqualFold(*in.Assignee, "me") {
 				in.Assignee = &agent
 			}
+			if in.Parent != nil && strings.TrimSpace(*in.Parent) != "" {
+				p := id(b, *in.Parent)
+				in.Parent = &p
+			}
 			t, err := s.UpdateTask(agent, "mcp", in)
 			if err != nil {
 				return nil, nil, err
@@ -767,6 +857,11 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 			if err := guard(b, in.ID, perm); err != nil {
 				return nil, nil, err
+			}
+			if perm == "finish" {
+				if err := noOpenSubs(in.ID); err != nil {
+					return nil, nil, err
+				}
 			}
 			t, err := s.MoveTask(agent, "mcp", in)
 			if err != nil {
@@ -893,6 +988,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 			if in.Link != "" {
 				perms = append(perms, "edit")
+			}
+			if err := noOpenSubs(in.ID); err != nil {
+				return nil, nil, err
 			}
 			if err := guard(b, in.ID, perms...); err != nil {
 				if !ok && !in.Done {

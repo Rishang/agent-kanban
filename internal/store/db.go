@@ -69,7 +69,8 @@ var schema = []string{
 	`CREATE TABLE IF NOT EXISTS tasks (project TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, descr TEXT NOT NULL DEFAULT '',
 		col TEXT NOT NULL, priority TEXT NOT NULL, assignee TEXT NOT NULL DEFAULT '', due TEXT NOT NULL DEFAULT '',
 		labels TEXT NOT NULL DEFAULT '[]', checklist TEXT NOT NULL DEFAULT '[]', pos REAL NOT NULL, created INTEGER NOT NULL,
-		updated INTEGER NOT NULL, link TEXT NOT NULL DEFAULT '', human INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (project, id))`,
+		updated INTEGER NOT NULL, link TEXT NOT NULL DEFAULT '', human INTEGER NOT NULL DEFAULT 0, parent TEXT NOT NULL DEFAULT '',
+		PRIMARY KEY (project, id))`,
 	`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, project TEXT NOT NULL, task_id TEXT NOT NULL, who TEXT NOT NULL,
 		text TEXT NOT NULL, t INTEGER NOT NULL)`,
 	`CREATE INDEX IF NOT EXISTS comments_task ON comments(project, task_id)`,
@@ -123,6 +124,12 @@ func (d *DB) migrate() error {
 	if rows, err := d.db.Query(`SELECT role FROM columns LIMIT 0`); err == nil {
 		rows.Close()
 	} else if _, err := d.db.Exec(`ALTER TABLE columns ADD COLUMN role TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// tasks.parent: sub-tasks. The default keeps every existing task top-level; older binaries ignore the column.
+	if rows, err := d.db.Query(`SELECT parent FROM tasks LIMIT 0`); err == nil {
+		rows.Close()
+	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN parent TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
 	return d.addColumnRoles()

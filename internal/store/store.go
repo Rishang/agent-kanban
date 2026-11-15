@@ -128,6 +128,7 @@ type Task struct {
 	Due         string    `json:"due,omitempty"`
 	Link        string    `json:"link,omitempty"`
 	Human       bool      `json:"human,omitempty"`
+	Parent      string    `json:"parent,omitempty"` // parent task id; sub-tasks are one level deep
 	Labels      []string  `json:"labels"`
 	Checklist   []Check   `json:"checklist"`
 	Comments    []Comment `json:"comments"`
@@ -173,6 +174,7 @@ type TaskInput struct {
 	Human       bool     `json:"-"` // humans only: set via the UI's set_human op
 	Labels      []string `json:"labels,omitempty" jsonschema:"existing label names from get_board"`
 	Checklist   []string `json:"checklist,omitempty" jsonschema:"checklist item texts"`
+	Parent      string   `json:"parent,omitempty" jsonschema:"parent task id to create this as its sub-task (one level: the parent can't be a sub-task)"`
 }
 
 type TaskPatch struct {
@@ -186,6 +188,7 @@ type TaskPatch struct {
 	Human       *bool     `json:"-"` // humans only: set via the UI's set_human op
 	Labels      *[]string `json:"labels,omitempty" jsonschema:"full label list (replaces the old one)"`
 	Checklist   *[]Check  `json:"checklist,omitempty" jsonschema:"full checklist (replaces the old one)"`
+	Parent      *string   `json:"parent,omitempty" jsonschema:"parent task id to make this a sub-task, or empty string to make it top-level"`
 }
 
 type MoveInput struct {
@@ -296,12 +299,12 @@ func getLabels(q querier, pid string, tasks []Task) ([]Label, error) {
 	return out, rows.Err()
 }
 
-const taskCols = `id,title,descr,col,priority,assignee,due,labels,checklist,pos,created,updated,link,human`
+const taskCols = `id,title,descr,col,priority,assignee,due,labels,checklist,pos,created,updated,link,human,parent`
 
 func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var labels, checklist string
-	err := sc.Scan(&t.ID, &t.Title, &t.Description, &t.Column, &t.Priority, &t.Assignee, &t.Due, &labels, &checklist, &t.Pos, &t.Created, &t.Updated, &t.Link, &t.Human)
+	err := sc.Scan(&t.ID, &t.Title, &t.Description, &t.Column, &t.Priority, &t.Assignee, &t.Due, &labels, &checklist, &t.Pos, &t.Created, &t.Updated, &t.Link, &t.Human, &t.Parent)
 	if err != nil {
 		return t, err
 	}
@@ -673,9 +676,37 @@ func (s *Store) newPos(q querier, col, before, self string) (float64, error) {
 func jsonStr(v any) string { b, _ := json.Marshal(v); return string(b) }
 
 func (s *Store) insertTask(tx *sql.Tx, t Task) error {
-	_, err := tx.Exec(`INSERT INTO tasks(project,`+taskCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, s.pid, t.ID, t.Title, t.Description, t.Column,
-		t.Priority, t.Assignee, t.Due, jsonStr(t.Labels), jsonStr(t.Checklist), t.Pos, t.Created, t.Updated, t.Link, t.Human)
+	_, err := tx.Exec(`INSERT INTO tasks(project,`+taskCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, s.pid, t.ID, t.Title, t.Description, t.Column,
+		t.Priority, t.Assignee, t.Due, jsonStr(t.Labels), jsonStr(t.Checklist), t.Pos, t.Created, t.Updated, t.Link, t.Human, t.Parent)
 	return err
+}
+
+// checkParent enforces one level of sub-tasks: parent exists in this project, is top-level, isn't self,
+// and self (if it already exists) has no sub-tasks of its own.
+func (s *Store) checkParent(q querier, self, parent string) error {
+	if parent == "" {
+		return nil
+	}
+	if parent == self {
+		return errors.New("a task can't be its own parent")
+	}
+	p, err := getTask(q, s.pid, parent)
+	if err != nil {
+		return fmt.Errorf("parent: %w", err)
+	}
+	if p.Parent != "" {
+		return fmt.Errorf("%s is itself a sub-task of %s; sub-tasks are one level deep, so use %s as the parent", p.ID, p.Parent, p.Parent)
+	}
+	if self != "" {
+		var n int
+		if err := q.QueryRow(`SELECT count(*) FROM tasks WHERE project=? AND parent=?`, s.pid, self).Scan(&n); err != nil {
+			return err
+		}
+		if n > 0 {
+			return fmt.Errorf("%s has %d sub-task(s), so it can't become a sub-task itself", self, n)
+		}
+	}
+	return nil
 }
 
 func (s *Store) CreateTask(who, via string, in TaskInput) (t Task, err error) {
@@ -710,7 +741,9 @@ func (s *Store) CreateTask(who, via string, in TaskInput) (t Task, err error) {
 		if in.Labels == nil {
 			in.Labels = []string{}
 		}
-		for _, e := range []error{d.checkCol(in.Column), checkPriority(in.Priority), d.checkAssignee(in.Assignee), d.checkLabels(in.Labels), checkDue(in.Due), checkLink(in.Link)} {
+		in.Parent = strings.TrimSpace(in.Parent)
+		for _, e := range []error{d.checkCol(in.Column), checkPriority(in.Priority), d.checkAssignee(in.Assignee), d.checkLabels(in.Labels), checkDue(in.Due), checkLink(in.Link),
+			s.checkParent(tx, "", in.Parent)} {
 			if e != nil {
 				return Event{}, e
 			}
@@ -736,7 +769,7 @@ func (s *Store) CreateTask(who, via string, in TaskInput) (t Task, err error) {
 		}
 		now := time.Now().UnixMilli()
 		t = Task{ID: fmt.Sprintf("%s-%d", d.st.Prefix, seq), Title: in.Title, Description: in.Description, Column: in.Column,
-			Priority: in.Priority, Assignee: in.Assignee, Due: in.Due, Link: in.Link, Human: in.Human, Labels: in.Labels, Checklist: checks, Comments: []Comment{},
+			Priority: in.Priority, Assignee: in.Assignee, Due: in.Due, Link: in.Link, Human: in.Human, Parent: in.Parent, Labels: in.Labels, Checklist: checks, Comments: []Comment{},
 			Pos: pos, Created: now, Updated: now}
 		return Event{Action: "created", TaskID: t.ID, Detail: t.Title}, s.insertTask(tx, t)
 	})
@@ -805,12 +838,22 @@ func (s *Store) UpdateTask(who, via string, p TaskPatch) (t Task, err error) {
 		if p.Checklist != nil {
 			t.Checklist, changed = *p.Checklist, append(changed, "checklist")
 		}
+		if p.Parent != nil {
+			np := strings.TrimSpace(*p.Parent)
+			if err := s.checkParent(tx, t.ID, np); err != nil {
+				return Event{}, err
+			}
+			if np != t.Parent {
+				t.Parent = np
+				changed = append(changed, map[bool]string{true: "parent → " + np, false: "made top-level"}[np != ""])
+			}
+		}
 		if len(changed) == 0 {
 			return Event{}, errors.New("nothing to update")
 		}
 		t.Updated = time.Now().UnixMilli()
-		_, err = tx.Exec(`UPDATE tasks SET title=?,descr=?,priority=?,assignee=?,due=?,link=?,human=?,labels=?,checklist=?,updated=? WHERE project=? AND id=?`,
-			t.Title, t.Description, t.Priority, t.Assignee, t.Due, t.Link, t.Human, jsonStr(t.Labels), jsonStr(t.Checklist), t.Updated, s.pid, t.ID)
+		_, err = tx.Exec(`UPDATE tasks SET title=?,descr=?,priority=?,assignee=?,due=?,link=?,human=?,labels=?,checklist=?,parent=?,updated=? WHERE project=? AND id=?`,
+			t.Title, t.Description, t.Priority, t.Assignee, t.Due, t.Link, t.Human, jsonStr(t.Labels), jsonStr(t.Checklist), t.Parent, t.Updated, s.pid, t.ID)
 		return Event{Action: "updated", TaskID: t.ID, Detail: strings.Join(changed, ", ")}, err
 	})
 	return
@@ -856,11 +899,22 @@ func (s *Store) DeleteTask(who, via, id string) error {
 		if err != nil {
 			return Event{}, err
 		}
-		if _, err := tx.Exec(`DELETE FROM comments WHERE project=? AND task_id=?`, s.pid, id); err != nil {
+		var n int
+		if err := tx.QueryRow(`SELECT count(*) FROM tasks WHERE project=? AND parent=?`, s.pid, id).Scan(&n); err != nil {
 			return Event{}, err
 		}
-		_, err = tx.Exec(`DELETE FROM tasks WHERE project=? AND id=?`, s.pid, id)
-		return Event{Action: "deleted", TaskID: id, Detail: t.Title}, err
+		// sub-tasks are deleted with their parent, comments included
+		if _, err := tx.Exec(`DELETE FROM comments WHERE project=? AND task_id IN (SELECT id FROM tasks WHERE project=? AND (id=? OR parent=?))`, s.pid, s.pid, id, id); err != nil {
+			return Event{}, err
+		}
+		if _, err = tx.Exec(`DELETE FROM tasks WHERE project=? AND (id=? OR parent=?)`, s.pid, id, id); err != nil {
+			return Event{}, err
+		}
+		detail := t.Title
+		if n > 0 {
+			detail += fmt.Sprintf(" and %d sub-task(s)", n)
+		}
+		return Event{Action: "deleted", TaskID: id, Detail: detail}, nil
 	})
 }
 
@@ -949,6 +1003,29 @@ func (s *Store) SaveColumns(who string, cols []Column) error {
 		}
 		return Event{Action: "updated columns"}, nil
 	})
+}
+
+// checkImportParents applies the sub-task rules to an import file: parents exist in it, are top-level and aren't self.
+func checkImportParents(ts []Task) error {
+	parent := map[string]string{}
+	for _, t := range ts {
+		parent[t.ID] = t.Parent
+	}
+	for _, t := range ts {
+		if t.Parent == "" {
+			continue
+		}
+		pp, ok := parent[t.Parent]
+		switch {
+		case t.Parent == t.ID:
+			return fmt.Errorf("task %s: a task can't be its own parent", t.ID)
+		case !ok:
+			return fmt.Errorf("task %s: parent %s is not in the import", t.ID, t.Parent)
+		case pp != "":
+			return fmt.Errorf("task %s: parent %s is itself a sub-task; sub-tasks are one level deep", t.ID, t.Parent)
+		}
+	}
+	return nil
 }
 
 // checkRoles allows at most one done and one closed column.
@@ -1114,6 +1191,9 @@ func (s *Store) Import(who string, b Board) error {
 		return errors.New("import has no columns")
 	}
 	if err := checkRoles(b.Columns); err != nil {
+		return err
+	}
+	if err := checkImportParents(b.Tasks); err != nil {
 		return err
 	}
 	return s.write(who, "ui", func(tx *sql.Tx) (Event, error) {
