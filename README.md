@@ -76,6 +76,7 @@ Anything else: `http://127.0.0.1:7777/mcp?agent=<name>&project=<project>`.
 | 🛡️ | **Guardrails** | Per-project agent permissions; **human-only** tasks that agents skip |
 | ⚡ | **Live** | Every change streams to open browsers over SSE; Activity shows who did what, via UI or MCP |
 | 🗂️ | **Rich tasks** | Priorities, labels, assignees, due dates, checklists, comments, links, WIP limits |
+| 📋 | **Plans** | Agents attach an implementation plan (MDX or an html-plan-report page) to a task; you review, edit and **Approve** it on the board before any code is written. Kept in the database, or (Settings → Plan storage) as specs in `.agent-kanban/plans/` synced both ways |
 | 📝 | **Markdown** | Sanitized GitHub-flavoured markdown with highlighted code, mermaid diagrams and SVG |
 | 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` (`is:done`, `is:closed`) |
 | 📁 | **Multi-project** | Each repo is a project in one shared database; task URLs like `/#my-app/KB-12` |
@@ -127,12 +128,15 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
 | `get_task` | Full description, checklist and comments |
 | `list_labels` | Labels with task counts |
+| `list_plans` | Every plan with its title and one-line description; search with `q` (BM25-ranked), `regex` or `status` |
+| `set_plan` / `get_plan` | Attach a markdown/MDX implementation plan to a task (from a file in the project or inline), versioned; a human approves it on the board before the agent builds |
 | `create_task` / `create_tasks` | Create one task, or up to 50 with per-item errors; `parent` makes a sub-task |
 | `update_task` / `move_task` / `check_item` / `add_comment` | Lower-level edits |
 | `delete_task` | Off by default; enable in Settings → MCP & skill |
 
 Inputs are forgiving (`"In Progress"`, `"#Bug"`, `12` or `SHOP-12`, assignee `me`), and a wrong value comes back
 with the list of valid ones. Every change lands in **Activity** with who did it and how (UI or MCP).
+Plans: the separate [`kanban-plan`](skills/kanban-plan/SKILL.md) skill teaches agents to write a plan, attach it with `set_plan` and wait for your **Approve** on the board.
 Prompts: **`plan`** breaks a goal into tasks, **`standup`** summarizes the board.
 
 ## Configuration

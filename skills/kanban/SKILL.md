@@ -20,9 +20,13 @@ A task that should not be done at all (duplicate, obsolete, out of scope, won't 
 
 **Sub-tasks** (if `create_task` accepts `parent`): break a larger task into sub-tasks one level deep with `parent: KB-20`; a sub-task can't have its own. `list_tasks` marks sub-tasks `↳KB-20` and parents `{sub-tasks 1/4}`, and `get_task` lists them. Work on the sub-tasks, not the parent: `next_task` skips a parent while any sub-task is open, and you can't finish it until they are all done or closed.
 
+**Plans** (if your tools include `set_plan`): for work the user wants to review before code is written, attach an implementation plan with `set_plan` (a `.md`/`.mdx` file in the project, or `body`). It waits as `awaiting` until a human approves it on the board; build only when `get_plan` says `approved`. You can't approve your own plan. `list_plans` lists and searches them (`q` ranked by BM25, `regex`, `status`). When `get_board` says plans are repo files, edit the `.mdx` directly and change status only with `set_plan`. The `kanban-plan` skill, if installed, has the full workflow and outline.
+
 `get_board` once per session tells you the columns (with roles and WIP limits), labels, members and your permissions. Inputs are forgiving: columns and labels by name in any case, ids as `12` or `KB-12`, assignee `me`. If a call fails, the error lists the valid values; fix and retry once.
 
 Write tools reply with a one-line status, not the whole task. Call `get_task` only when you need the description or comments; `list_tasks` is one line per task.
+
+Plans: `set_plan` / `get_plan`, see above.
 
 The lower-level tools (`move_task`, `update_task`, `check_item`, `add_comment`, `list_tasks`, `get_task`) are there when the loop doesn't fit.
 
