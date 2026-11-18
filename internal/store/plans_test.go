@@ -68,3 +68,32 @@ func TestPlans(t *testing.T) {
 		t.Fatalf("remove: %+v", got)
 	}
 }
+
+func TestPlanCodeImports(t *testing.T) {
+	body, _ := ParsePlan("import X from './x'\n\n# Plan\n\n```python\nimport os\n```\n\n```js\nexport default 1\n```")
+	if body != "# Plan\n\n```python\nimport os\n```\n\n```js\nexport default 1\n```" {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestPlanStaleEdit(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "k.db"), "me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	p, _ := db.AddProject("Plans", "")
+	s, _ := db.Project(p.ID)
+	task, _ := s.CreateTask("me", "ui", TaskInput{Title: "feature"})
+	s.SetPlan("bot", "mcp", PlanInput{ID: task.ID, Body: ptr("# v1")})
+	s.SetPlan("bot", "mcp", PlanInput{ID: task.ID, Body: ptr("# v2 from the agent")})
+	if _, err := s.SetPlan("me", "ui", PlanInput{ID: task.ID, Version: 1, Body: ptr("# v1 edited"), Status: "awaiting"}); err == nil || !strings.Contains(err.Error(), "changed since") {
+		t.Fatalf("stale edit accepted: %v", err)
+	}
+	if got, _ := s.Task(task.ID); got.Plan != "# v2 from the agent" {
+		t.Fatalf("plan = %q", got.Plan)
+	}
+	if got, err := s.SetPlan("me", "ui", PlanInput{ID: task.ID, Version: 2, Body: ptr("# v2 edited"), Status: "awaiting"}); err != nil || got.PlanVersion != 3 {
+		t.Fatalf("current edit: %+v %v", got, err)
+	}
+}

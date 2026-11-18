@@ -27,10 +27,9 @@ type PlanInput struct {
 }
 
 var (
-	frontRe   = regexp.MustCompile(`(?s)\A\s*---\r?\n(.*?)\r?\n---[ \t]*(\r?\n|\z)`)
-	statusRe  = regexp.MustCompile(`(?m)^status:\s*["']?([a-z-]+)["']?\s*$`)
-	mdxLineRe = regexp.MustCompile(`(?m)^(import|export)\s.*$\n?`) // ponytail: drops top-level MDX import/export lines; JSX tags are left to the sanitizer
-	htmlStRe  = regexp.MustCompile(`data-status="([a-z-]+)"`)      // html-plan-report's status badge
+	frontRe  = regexp.MustCompile(`(?s)\A\s*---\r?\n(.*?)\r?\n---[ \t]*(\r?\n|\z)`)
+	statusRe = regexp.MustCompile(`(?m)^status:\s*["']?([a-z-]+)["']?\s*$`)
+	htmlStRe = regexp.MustCompile(`data-status="([a-z-]+)"`) // html-plan-report's status badge
 )
 
 // MaxPlan is the largest plan body accepted. A standalone html-plan-report page is about 70 KB.
@@ -57,7 +56,8 @@ func ParsePlan(src string) (body, status string) {
 		}
 		src = src[len(m[0]):]
 	}
-	return strings.TrimSpace(mdxLineRe.ReplaceAllString(src, "")), status
+	// only the leading MDX import/export lines: the same words inside code blocks are plan content. JSX tags are left to the sanitizer
+	return strings.TrimSpace(src[len(mdxHeadRe.FindString(src)):]), status
 }
 
 // SetPlan writes a task's plan and/or its status. A new body bumps the version and, unless a status is given,
@@ -99,6 +99,10 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 			body, fm := ParsePlan(*in.Body)
 			if len(body) > MaxPlan {
 				return Event{}, errors.New("plan is over 1 MB; trim it or split the task")
+			}
+			// The board sends the version it showed: an edit based on an older one would overwrite a newer, unseen plan.
+			if via == "ui" && in.Version != 0 && in.Version != t.PlanVersion && body != t.Plan {
+				return Event{}, fmt.Errorf("the plan changed since you opened it (now v%d); reload to see it, then edit again", t.PlanVersion)
 			}
 			if via != "ui" && fm != "draft" && fm != "awaiting" && fm != "superseded" {
 				fm = "" // a document can't move itself past review (approved, implemented); the board and set_plan status= decide
