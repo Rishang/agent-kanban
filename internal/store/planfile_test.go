@@ -136,6 +136,15 @@ func TestPlanFiles(t *testing.T) {
 	if b, _ := os.ReadFile(other); string(b) != "keep" {
 		t.Errorf("file outside the repo was changed: %q", b)
 	}
+	// nor a symlink to another file inside the repo
+	os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main"), 0o644)
+	os.Symlink(filepath.Join(repo, "main.go"), filepath.Join(repo, PlanDir, "in.mdx"))
+	if err := writePlanFile(repo, PlanDir+"/in.mdx", "# x", "draft", false); err == nil {
+		t.Error("write through a symlink to a repo file should fail")
+	}
+	if b, _ := os.ReadFile(filepath.Join(repo, "main.go")); string(b) != "package main" {
+		t.Errorf("repo file was changed: %q", b)
+	}
 	// a plan written on the board gets its own file
 	b, _ := s.CreateTask("me", "ui", TaskInput{Title: "Dark mode!"})
 	body = "# Dark mode"

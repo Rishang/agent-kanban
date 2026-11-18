@@ -174,12 +174,16 @@ func writePlanFile(dir, rel, body, status string, statusOnly bool) error {
 	if IsHTMLPlan(body) {
 		return nil
 	}
-	if !planExt(rel) || strings.EqualFold(filepath.Ext(rel), ".html") { // plan_path can arrive by sync: only ever write markdown plan files
+	if filepath.IsAbs(rel) || !planExt(rel) || strings.EqualFold(filepath.Ext(rel), ".html") { // plan_path can arrive by sync: only ever write markdown plan files
 		return fmt.Errorf("%s is not a markdown plan file", rel)
 	}
 	abs, _, err := planFile(dir, rel)
 	if err != nil {
 		return err
+	}
+	// planFile resolves symlinks: refuse a linked plan path that is a symlink, or resolves to a non-markdown file.
+	if fi, err := os.Lstat(filepath.Join(dir, rel)); (err == nil && fi.Mode()&os.ModeSymlink != 0) || !planExt(abs) || strings.EqualFold(filepath.Ext(abs), ".html") {
+		return fmt.Errorf("%s is a symlink or not a markdown plan file; plan files must be regular files", rel)
 	}
 	old, err := os.ReadFile(abs)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -194,9 +198,6 @@ func writePlanFile(dir, rel, body, status string, statusOnly bool) error {
 	}
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return err
-	}
-	if fi, err := os.Lstat(abs); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("%s is a symlink; plan files must be regular files", rel)
 	}
 	// A fresh, exclusively created temp file (never a fixed name a symlink could sit on), then an atomic
 	// rename: an editor never sees half a file.
