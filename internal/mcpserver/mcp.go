@@ -61,6 +61,20 @@ type CloseInput struct {
 	Reason string `json:"reason" jsonschema:"markdown: why this won't be done (duplicate of KB-3, obsolete, out of scope…)"`
 }
 
+var (
+	dropRe  = regexp.MustCompile(`(?is)<(script|style|head|nav)\b.*?</(script|style|head|nav)>`)
+	tagRe   = regexp.MustCompile(`(?s)<[^>]*>`)
+	blankRe = regexp.MustCompile(`\n\s*\n\s*`)
+)
+
+// planText is an HTML plan as plain text for agents: no head, styles, scripts or tags.
+// ponytail: regex strip, fine for the skill's own templates; use x/net/html if plans get exotic.
+func planText(page string) string {
+	t := tagRe.ReplaceAllString(dropRe.ReplaceAllString(page, ""), "")
+	t = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'", "&nbsp;", " ", "&amp;", "&").Replace(t)
+	return strings.TrimSpace(blankRe.ReplaceAllString(t, "\n"))
+}
+
 type CreateMany struct {
 	Tasks []store.TaskInput `json:"tasks" jsonschema:"tasks to create, in order"`
 }
@@ -379,6 +393,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			"4. finish_task when done: summary of what changed and how it was verified, plus the PR link; it goes to review.\n" +
 			"A task that should not be done at all (duplicate, obsolete, won't fix) is closed with close_task and a reason, not finished.\n" +
 			"Tasks can have sub-tasks one level deep (parent on create_task/update_task). Work on the sub-tasks; a parent can't be finished while any is open.\n" +
+			"For non-trivial work, attach an implementation plan with set_plan before coding; a human approves it on the board, so build only once get_plan says approved.\n" +
 			"Every result includes the task url; share it with the user. Columns and labels accept names in any case; ids accept 12 or KB-12. " +
 			"Tasks marked human-only are not yours: they are hidden from list_tasks and read-only. If a call returns permission denied, don't retry; tell the user.",
 	})
@@ -407,6 +422,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		}
 		if comments > 0 {
 			st += fmt.Sprintf(" (%d comments)", comments)
+		}
+		if t.PlanStatus != "" {
+			st += fmt.Sprintf(" {plan v%d %s}", t.PlanVersion, t.PlanStatus)
 		}
 		return st
 	}
@@ -518,6 +536,11 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 				if m.Agent {
 					o.WriteString("(agent)")
 				}
+			}
+			if b.Settings.PlanStorage == store.PlanStorageFiles {
+				o.WriteString("\nplans: repo files in " + store.PlanDir + "/ (edit the .mdx with your own tools; set_plan path= once to link a new one; status only via set_plan)")
+			} else {
+				o.WriteString("\nplans: on the board (set_plan path= or body=)")
 			}
 			o.WriteString("\npriorities: " + strings.Join(b.Priorities, ">") + "\npermissions:")
 			for _, k := range slices.Sorted(maps.Keys(store.PermNames)) {
@@ -666,6 +689,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			o.WriteString(line(t, 0) + "\n" + link + t.ID)
 			if t.Link != "" {
 				o.WriteString("\nlink: " + t.Link)
+			}
+			if t.Plan != "" {
+				fmt.Fprintf(&o, "\nplan: v%d %s (get_plan to read it)", t.PlanVersion, t.PlanStatus)
 			}
 			all, err := s.Tasks()
 			if err != nil {
@@ -1069,6 +1095,82 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 				return nil, nil, err
 			}
 			return text("Commented on " + in.ID + " · " + link + in.ID), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "list_plans", Annotations: ro,
+		Description: "Plans on this board, one per task: id, status, version, title and the plan's one-line description, newest first. " +
+			"q ranks by BM25 relevance over title, description and body; regex (RE2) filters and shows the matching line; status filters. Then get_plan id."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in PlansInput) (*mcp.CallToolResult, any, error) {
+			s.Touch(agent)
+			s.RefreshPlans()
+			tasks, err := s.Tasks()
+			if err != nil {
+				return nil, nil, err
+			}
+			out, err := listPlans(tasks, in, link)
+			if err != nil {
+				return nil, nil, err
+			}
+			return text(out), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "get_plan", Annotations: ro, Description: "A task's implementation plan (markdown) with its status and version. " +
+		"Build only when the status is approved: a human approves plans on the board."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in IDInput) (*mcp.CallToolResult, any, error) {
+			s.Touch(agent)
+			b, err := meta()
+			if err != nil {
+				return nil, nil, err
+			}
+			t, err := s.Task(id(b, in.ID))
+			if err != nil {
+				return nil, nil, err
+			}
+			if t.Plan == "" {
+				return text(t.ID + " has no plan · " + link + t.ID), nil, nil
+			}
+			if t.PlanPath != "" { // the repo file may have moved on
+				s.RefreshPlans()
+				if t, err = s.Task(t.ID); err != nil {
+					return nil, nil, err
+				}
+			}
+			body := t.Plan
+			if t.PlanFormat == "html" {
+				body = planText(body)
+			}
+			file := ""
+			if t.PlanPath != "" {
+				file = " · file " + t.PlanPath
+			}
+			return text(fmt.Sprintf("plan of %s %q: v%d %s%s · %s\n\n%s", t.ID, t.Title, t.PlanVersion, t.PlanStatus, file, link+t.ID, body)), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "set_plan",
+		Description: "Attach or revise a task's implementation plan, or change its status. A plan is markdown/MDX (mermaid and code blocks render on the board) " +
+			"or an html-plan-report page (.plan/<task>.plan.html; shown as a page). Pass path to the file in the project (preferred) or body. A new or changed plan becomes a new version with status awaiting: " +
+			"a human reviews and approves it on the board; check get_plan before building. Front matter status: is honoured. Needs the edit permission."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in store.PlanInput) (*mcp.CallToolResult, any, error) {
+			b, err := meta()
+			if err != nil {
+				return nil, nil, err
+			}
+			in.ID = id(b, in.ID)
+			if err := guard(b, in.ID, "edit"); err != nil {
+				return nil, nil, err
+			}
+			t, err := s.SetPlan(agent, "mcp", in)
+			if err != nil {
+				return nil, nil, err
+			}
+			if t.Plan == "" {
+				return text("Removed the plan of " + t.ID + " · " + link + t.ID), nil, nil
+			}
+			out := fmt.Sprintf("Plan of %s is v%d %s · %s", t.ID, t.PlanVersion, t.PlanStatus, link+t.ID)
+			if t.PlanPath != "" {
+				out += " · file " + t.PlanPath + " (kept in sync: edit it and the board gets a new version)"
+			}
+			return text(out), nil, nil
 		})
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "delete_task", Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true)},

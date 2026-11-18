@@ -40,6 +40,7 @@ var ops = map[string]opFunc{
 	"add_comment": op(func(s *store.Store, who string, in store.CommentInput) (any, error) {
 		return s.AddComment(who, "ui", in)
 	}),
+	"set_plan": op(func(s *store.Store, who string, in store.PlanInput) (any, error) { return s.SetPlan(who, "ui", in) }),
 	"set_human": op(func(s *store.Store, who string, in struct {
 		ID    string `json:"id"`
 		Human bool   `json:"human"`
@@ -164,7 +165,27 @@ func Handler(d *store.DB, web fs.FS, mcp http.Handler) http.Handler {
 	}
 	mux.HandleFunc("GET /api/p/{pid}/board", withStore(func(w http.ResponseWriter, r *http.Request, s *store.Store) {
 		b, err := s.Board()
+		for i := range b.Tasks { // HTML plans are ~70 KB pages, fetched on demand from /plan/{id}; export keeps them
+			if b.Tasks[i].PlanFormat == "html" {
+				b.Tasks[i].Plan = ""
+			}
+		}
 		reply(w, b, err)
+	}))
+	// An html-plan-report page as the agent wrote it: the plan reader fetches it to render, and ↗ opens it in a tab. The CSP sandbox gives it an
+	// opaque origin, so its scripts (theme toggle, highlighting) run but can't call this API or read the board.
+	mux.HandleFunc("GET /api/p/{pid}/plan/{id}", withStore(func(w http.ResponseWriter, r *http.Request, s *store.Store) {
+		t, err := s.Task(r.PathValue("id"))
+		if err != nil || t.PlanFormat != "html" {
+			http.Error(w, "no HTML plan", http.StatusNotFound)
+			return
+		}
+		h := w.Header()
+		h.Set("Content-Type", "text/html; charset=utf-8")
+		h.Set("Content-Security-Policy", "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals; frame-ancestors 'self'")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Cache-Control", "no-cache")
+		io.WriteString(w, t.Plan)
 	}))
 	mux.HandleFunc("GET /api/p/{pid}/export", withStore(func(w http.ResponseWriter, r *http.Request, s *store.Store) {
 		b, err := s.Board()

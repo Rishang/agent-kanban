@@ -70,6 +70,7 @@ var schema = []string{
 		col TEXT NOT NULL, priority TEXT NOT NULL, assignee TEXT NOT NULL DEFAULT '', due TEXT NOT NULL DEFAULT '',
 		labels TEXT NOT NULL DEFAULT '[]', checklist TEXT NOT NULL DEFAULT '[]', pos REAL NOT NULL, created INTEGER NOT NULL,
 		updated INTEGER NOT NULL, link TEXT NOT NULL DEFAULT '', human INTEGER NOT NULL DEFAULT 0, parent TEXT NOT NULL DEFAULT '',
+		plan TEXT NOT NULL DEFAULT '', plan_status TEXT NOT NULL DEFAULT '', plan_version INTEGER NOT NULL DEFAULT 0, plan_path TEXT NOT NULL DEFAULT '', plan_approved INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (project, id))`,
 	`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, project TEXT NOT NULL, task_id TEXT NOT NULL, who TEXT NOT NULL,
 		text TEXT NOT NULL, t INTEGER NOT NULL)`,
@@ -130,6 +131,29 @@ func (d *DB) migrate() error {
 	if rows, err := d.db.Query(`SELECT parent FROM tasks LIMIT 0`); err == nil {
 		rows.Close()
 	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN parent TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// tasks.plan*: implementation plans (markdown) reviewed on the board.
+	if rows, err := d.db.Query(`SELECT plan FROM tasks LIMIT 0`); err == nil {
+		rows.Close()
+	} else {
+		for _, q := range []string{`ALTER TABLE tasks ADD COLUMN plan TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE tasks ADD COLUMN plan_status TEXT NOT NULL DEFAULT ''`, `ALTER TABLE tasks ADD COLUMN plan_version INTEGER NOT NULL DEFAULT 0`} {
+			if _, err := d.db.Exec(q); err != nil {
+				return err
+			}
+		}
+	}
+	// tasks.plan_path: plans kept as files in the repo (planStorage = files).
+	if rows, err := d.db.Query(`SELECT plan_path FROM tasks LIMIT 0`); err == nil {
+		rows.Close()
+	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN plan_path TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// tasks.plan_approved: the plan version a human last approved (0 = never).
+	if rows, err := d.db.Query(`SELECT plan_approved FROM tasks LIMIT 0`); err == nil {
+		rows.Close()
+	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN plan_approved INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
 	return d.addColumnRoles()

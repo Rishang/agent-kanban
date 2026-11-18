@@ -27,7 +27,8 @@ type Settings struct {
 	DefaultCol      string          `json:"defaultCol"`
 	DefaultAssignee string          `json:"defaultAssignee"`
 	ArchiveDays     int             `json:"archiveDays"`
-	Me              string          `json:"me"` // per process (OS user), never stored: synced machines differ
+	PlanStorage     string          `json:"planStorage,omitempty"` // "" = in the board's database; PlanStorageFiles = also as files in the repo
+	Me              string          `json:"me"`                    // per process (OS user), never stored: synced machines differ
 	Perms           map[string]bool `json:"perms"`
 }
 
@@ -119,23 +120,29 @@ type Comment struct {
 }
 
 type Task struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Column      string    `json:"column"`
-	Priority    string    `json:"priority"`
-	Assignee    string    `json:"assignee,omitempty"`
-	Due         string    `json:"due,omitempty"`
-	Link        string    `json:"link,omitempty"`
-	Human       bool      `json:"human,omitempty"`
-	Parent      string    `json:"parent,omitempty"` // parent task id; sub-tasks are one level deep
-	Labels      []string  `json:"labels"`
-	Checklist   []Check   `json:"checklist"`
-	Comments    []Comment `json:"comments"`
-	URL         string    `json:"url,omitempty"` // deep link, filled in for MCP responses
-	Pos         float64   `json:"pos"`
-	Created     int64     `json:"created"`
-	Updated     int64     `json:"updated"`
+	ID           string    `json:"id"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	Column       string    `json:"column"`
+	Priority     string    `json:"priority"`
+	Assignee     string    `json:"assignee,omitempty"`
+	Due          string    `json:"due,omitempty"`
+	Link         string    `json:"link,omitempty"`
+	Human        bool      `json:"human,omitempty"`
+	Parent       string    `json:"parent,omitempty"`     // parent task id; sub-tasks are one level deep
+	Plan         string    `json:"plan,omitempty"`       // implementation plan, markdown (see SetPlan)
+	PlanStatus   string    `json:"planStatus,omitempty"` // one of PlanStatuses
+	PlanVersion  int       `json:"planVersion,omitempty"`
+	PlanFormat   string    `json:"planFormat,omitempty"`   // "html" for an html-plan-report page, "" for markdown
+	PlanPath     string    `json:"planPath,omitempty"`     // the linked file, relative to the project folder (planStorage = files)
+	PlanApproved int       `json:"planApproved,omitempty"` // the version a human last approved, 0 = never
+	Labels       []string  `json:"labels"`
+	Checklist    []Check   `json:"checklist"`
+	Comments     []Comment `json:"comments"`
+	URL          string    `json:"url,omitempty"` // deep link, filled in for MCP responses
+	Pos          float64   `json:"pos"`
+	Created      int64     `json:"created"`
+	Updated      int64     `json:"updated"`
 }
 
 type Event struct {
@@ -299,12 +306,12 @@ func getLabels(q querier, pid string, tasks []Task) ([]Label, error) {
 	return out, rows.Err()
 }
 
-const taskCols = `id,title,descr,col,priority,assignee,due,labels,checklist,pos,created,updated,link,human,parent`
+const taskCols = `id,title,descr,col,priority,assignee,due,labels,checklist,pos,created,updated,link,human,parent,plan,plan_status,plan_version,plan_path,plan_approved`
 
 func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var labels, checklist string
-	err := sc.Scan(&t.ID, &t.Title, &t.Description, &t.Column, &t.Priority, &t.Assignee, &t.Due, &labels, &checklist, &t.Pos, &t.Created, &t.Updated, &t.Link, &t.Human, &t.Parent)
+	err := sc.Scan(&t.ID, &t.Title, &t.Description, &t.Column, &t.Priority, &t.Assignee, &t.Due, &labels, &checklist, &t.Pos, &t.Created, &t.Updated, &t.Link, &t.Human, &t.Parent, &t.Plan, &t.PlanStatus, &t.PlanVersion, &t.PlanPath, &t.PlanApproved)
 	if err != nil {
 		return t, err
 	}
@@ -317,6 +324,9 @@ func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 		t.Checklist = []Check{}
 	}
 	t.Comments = []Comment{}
+	if IsHTMLPlan(t.Plan) {
+		t.PlanFormat = "html"
+	}
 	return t, nil
 }
 
@@ -434,6 +444,7 @@ func (s *Store) board(full bool) (Board, error) {
 		b.Labels, err = getLabels(s.db, s.pid, ts)
 		return b, err
 	}
+	s.RefreshPlans() // pick up plan files edited in the repo before showing them
 	if b.Tasks, err = getTasks(s.db, s.pid, true); err != nil {
 		return b, err
 	}
@@ -676,8 +687,8 @@ func (s *Store) newPos(q querier, col, before, self string) (float64, error) {
 func jsonStr(v any) string { b, _ := json.Marshal(v); return string(b) }
 
 func (s *Store) insertTask(tx *sql.Tx, t Task) error {
-	_, err := tx.Exec(`INSERT INTO tasks(project,`+taskCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, s.pid, t.ID, t.Title, t.Description, t.Column,
-		t.Priority, t.Assignee, t.Due, jsonStr(t.Labels), jsonStr(t.Checklist), t.Pos, t.Created, t.Updated, t.Link, t.Human, t.Parent)
+	_, err := tx.Exec(`INSERT INTO tasks(project,`+taskCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, s.pid, t.ID, t.Title, t.Description, t.Column,
+		t.Priority, t.Assignee, t.Due, jsonStr(t.Labels), jsonStr(t.Checklist), t.Pos, t.Created, t.Updated, t.Link, t.Human, t.Parent, t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved)
 	return err
 }
 
@@ -948,6 +959,9 @@ func (s *Store) SaveSettings(who string, st Settings) error {
 		}
 		if st.Perms == nil {
 			st.Perms = map[string]bool{}
+		}
+		if st.PlanStorage != PlanStorageFiles {
+			st.PlanStorage = ""
 		}
 		if name := strings.TrimSpace(st.Board); name != "" {
 			if _, err := tx.Exec(`UPDATE projects SET name=? WHERE id=?`, name, s.pid); err != nil {
