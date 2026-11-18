@@ -36,9 +36,6 @@ func planFile(dir, path string) (abs, rel string, err error) {
 	if dir == "" {
 		return "", "", errors.New("this project has no folder on disk; send the plan as body instead")
 	}
-	if ext := strings.ToLower(filepath.Ext(path)); ext != ".md" && ext != ".mdx" && ext != ".markdown" && ext != ".html" {
-		return "", "", errors.New("path must be a .md, .mdx or .html file")
-	}
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(dir, path)
 	}
@@ -79,8 +76,19 @@ func planFile(dir, path string) (abs, rel string, err error) {
 	return real, filepath.ToSlash(rel), nil
 }
 
+func planExt(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".md", ".mdx", ".markdown", ".html":
+		return true
+	}
+	return false
+}
+
 // ReadPlanFile reads a plan file inside dir. An html-plan-report page gets its _assets inlined (bundle_plan.py).
 func ReadPlanFile(dir, path string) (content, rel string, err error) {
+	if !planExt(path) {
+		return "", "", errors.New("path must be a .md, .mdx or .html file")
+	}
 	abs, rel, err := planFile(dir, path)
 	if err != nil {
 		return "", "", err
@@ -94,26 +102,38 @@ func ReadPlanFile(dir, path string) (content, rel string, err error) {
 	if err != nil || !strings.EqualFold(filepath.Ext(abs), ".html") {
 		return string(b), rel, err
 	}
-	page, err := bundlePlan(string(b), filepath.Dir(abs))
+	page, err := bundlePlan(string(b), dir, filepath.Dir(abs))
 	return page, rel, err
 }
 
 // bundlePlan makes an html-plan-report page standalone, like the skill's bundle_plan.py:
-// it inlines _assets/plan.css and plan.js from beside the page and drops the "← All plans" link.
-func bundlePlan(page, dir string) (string, error) {
+// it inlines _assets/plan.css and plan.js from beside the page (pageDir; both must resolve inside the project
+// folder root, like the page) and drops the "← All plans" link.
+func bundlePlan(page, root, pageDir string) (string, error) {
 	if !cssLinkRe.MatchString(page) && !jsLinkRe.MatchString(page) {
 		return page, nil // already standalone
 	}
-	css, err := os.ReadFile(filepath.Join(dir, "_assets", "plan.css"))
-	if err != nil {
-		return "", fmt.Errorf("%w (run the skill's update_index.py, or bundle_plan.py, first)", err)
+	asset := func(name string) (string, error) {
+		abs, _, err := planFile(root, filepath.Join(pageDir, "_assets", name))
+		if err != nil {
+			return "", err
+		}
+		b, err := os.ReadFile(abs)
+		if err != nil {
+			return "", fmt.Errorf("%w (run the skill's update_index.py, or bundle_plan.py, first)", err)
+		}
+		return string(b), nil
 	}
-	js, err := os.ReadFile(filepath.Join(dir, "_assets", "plan.js"))
+	css, err := asset("plan.css")
 	if err != nil {
-		return "", fmt.Errorf("%w (run the skill's update_index.py, or bundle_plan.py, first)", err)
+		return "", err
 	}
-	page = cssLinkRe.ReplaceAllLiteralString(page, "<style>\n"+string(css)+"</style>\n")
-	page = jsLinkRe.ReplaceAllLiteralString(page, "<script>\n"+string(js)+"</script>\n")
+	js, err := asset("plan.js")
+	if err != nil {
+		return "", err
+	}
+	page = cssLinkRe.ReplaceAllLiteralString(page, "<style>\n"+css+"</style>\n")
+	page = jsLinkRe.ReplaceAllLiteralString(page, "<script>\n"+js+"</script>\n")
 	page = backRe.ReplaceAllString(page, "")
 	return strings.Replace(page, "<head>", "<head>\n<meta name=\"plan-bundle\" content=\"standalone\">", 1), nil
 }
@@ -153,6 +173,9 @@ func setFileStatus(old, status string) string {
 func writePlanFile(dir, rel, body, status string, statusOnly bool) error {
 	if IsHTMLPlan(body) {
 		return nil
+	}
+	if !planExt(rel) || strings.EqualFold(filepath.Ext(rel), ".html") { // plan_path can arrive by sync: only ever write markdown plan files
+		return fmt.Errorf("%s is not a markdown plan file", rel)
 	}
 	abs, _, err := planFile(dir, rel)
 	if err != nil {

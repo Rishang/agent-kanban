@@ -1530,7 +1530,7 @@ Vue.createApp({
     const setHuman = v => save('set_human', { id: t.value.id, human: v });
     const editingPlan = Vue.ref(false), planEl = Vue.ref(null);
     Vue.watch(() => S.openId, () => { editingPlan.value = false; });
-    const setPlan = body => save('set_plan', { id: t.value.id, ...body });
+    const setPlan = body => save('set_plan', { id: t.value.id, version: t.value.planVersion, ...body });
     async function editPlan() {
       editingPlan.value = true; await Vue.nextTick();
       const d = planEl.value; if (d) { grow(d); d.focus(); }
@@ -1712,7 +1712,7 @@ Vue.createApp({
       heads().forEach((h, i) => { if (h.getBoundingClientRect().top - top < 80) at = i; });
       active.value = at;
     }
-    const setPlan = status => save('set_plan', { id: cur.value.id, status });
+    const setPlan = status => save('set_plan', { id: cur.value.id, version: cur.value.planVersion, status });
     // Per-card dropdown: the plan task's sub-tasks and checklist.
     const openWork = Vue.reactive(new Set());
     const toggleWork = id => openWork.has(id) ? openWork.delete(id) : openWork.add(id);

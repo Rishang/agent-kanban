@@ -22,6 +22,8 @@ type PlanInput struct {
 	Path   string  `json:"path,omitempty" jsonschema:"plan file inside the project folder (relative or absolute): .md/.mdx, or an html-plan-report page (its _assets are inlined); cheaper than body for long plans"`
 	Body   *string `json:"body,omitempty" jsonschema:"the plan as markdown, MDX or a standalone HTML page instead of path (replaces the old one; empty string removes the plan)"`
 	Status string  `json:"status,omitempty" jsonschema:"draft, awaiting, implemented, implemented-deviations or superseded (approved is set by a human on the board)"`
+	// Version is the plan version the reviewer was shown; the board sends it so Approve can't sign off a newer, unseen version.
+	Version int `json:"version,omitempty" jsonschema:"-"`
 }
 
 var (
@@ -98,8 +100,8 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 			if len(body) > MaxPlan {
 				return Event{}, errors.New("plan is over 1 MB; trim it or split the task")
 			}
-			if fm == PlanApproved && via != "ui" {
-				fm = "" // a document can't approve itself; the board decides
+			if via != "ui" && fm != "draft" && fm != "awaiting" && fm != "superseded" {
+				fm = "" // a document can't move itself past review (approved, implemented); the board and set_plan status= decide
 			}
 			if body == "" { // remove; a linked file is left alone, only unlinked
 				_, err := tx.Exec(`UPDATE tasks SET plan='',plan_status='',plan_version=0,plan_path='',plan_approved=0,updated=? WHERE project=? AND id=?`, time.Now().UnixMilli(), s.pid, t.ID)
@@ -140,8 +142,18 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 		if status == PlanApproved && via != "ui" && (changed || t.PlanStatus != PlanApproved) {
 			return Event{}, errors.New("only a human can approve a plan, on the board; set status awaiting and ask the user to review it")
 		}
-		if strings.HasPrefix(status, "implemented") && via != "ui" && t.PlanApproved == 0 && status != t.PlanStatus {
-			return Event{}, errors.New("this plan was never approved; it can't be implemented yet. Ask the user to approve it on the board")
+		if status == PlanApproved && via == "ui" && t.PlanStatus != PlanApproved && in.Version != t.PlanVersion-btoi(changed) {
+			return Event{}, fmt.Errorf("the plan changed since you opened it (now v%d); review it again before approving", t.PlanVersion)
+		}
+		if via != "ui" {
+			// implemented: exactly the approved version was built. implemented-deviations: an approved plan, with its
+			// deviation log (a later, unreviewed version) shown as such on the board.
+			if status == "implemented" && t.PlanApproved != t.PlanVersion && (changed || status != t.PlanStatus) {
+				return Event{}, errors.New("this version of the plan was never approved; ask the user to approve it on the board, or mark it implemented-deviations if the build departed from the approved one")
+			}
+			if status == "implemented-deviations" && t.PlanApproved == 0 && status != t.PlanStatus {
+				return Event{}, errors.New("this plan was never approved; it can't be implemented yet. Ask the user to approve it on the board")
+			}
 		}
 		if status == PlanApproved {
 			t.PlanApproved = t.PlanVersion
@@ -208,4 +220,11 @@ func (s *Store) RefreshPlans() {
 			s.SetPlan(s.me, "file", PlanInput{ID: l.id, Body: &content})
 		}
 	}
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

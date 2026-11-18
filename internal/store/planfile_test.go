@@ -39,6 +39,12 @@ func TestReadPlanFile(t *testing.T) {
 	if err != nil || !strings.Contains(got, "<style>\nbody{}") || !strings.Contains(got, "var x=1") || strings.Contains(got, "All plans") || !strings.Contains(got, "plan-bundle") {
 		t.Fatalf("bundled plan = %q %v", got, err)
 	}
+	// a symlinked asset that leads outside is never inlined
+	os.Remove(filepath.Join(dir, ".plan", "_assets", "plan.css"))
+	os.Symlink(filepath.Join(out, "x.md"), filepath.Join(dir, ".plan", "_assets", "plan.css"))
+	if got, _, err := ReadPlanFile(dir, ".plan/x.plan.html"); err == nil || strings.Contains(got, "secret") {
+		t.Fatalf("inlined an asset from outside the project: %v", err)
+	}
 }
 
 // planStorage = files: the plan is a file in the repo, synced both ways.
@@ -71,7 +77,7 @@ func TestPlanFiles(t *testing.T) {
 		t.Fatalf("status not written to the file:\n%s", f)
 	}
 	// approving on the board writes the status into the spec, without a new version
-	if got, _ = s.SetPlan("me", "ui", PlanInput{ID: a.ID, Status: "approved"}); got.PlanVersion != 1 || !strings.Contains(read(spec), "status: approved") {
+	if got, _ = s.SetPlan("me", "ui", PlanInput{ID: a.ID, Status: "approved", Version: 1}); got.PlanVersion != 1 || !strings.Contains(read(spec), "status: approved") {
 		t.Fatalf("approve: %+v\n%s", got, read(spec))
 	}
 	if ev, _ := s.Events(1); ev[0].Action != "marked the plan of" {
@@ -112,7 +118,8 @@ func TestPlanFiles(t *testing.T) {
 	}
 	// (e) after approval, a deviation-log edit picked up from the repo first (awaiting) can still be marked
 	// implemented-deviations by the agent's own call, without a second approval
-	s.SetPlan("me", "ui", PlanInput{ID: a.ID, Status: "approved"})
+	cur, _ := s.Task(a.ID)
+	s.SetPlan("me", "ui", PlanInput{ID: a.ID, Status: "approved", Version: cur.PlanVersion})
 	os.WriteFile(filepath.Join(repo, spec), []byte(read(spec)+"\n## Deviation log\n| S1 | changed |\n"), 0o644)
 	s.RefreshPlans()
 	got, err = s.SetPlan("bot", "mcp", PlanInput{ID: a.ID, Path: spec, Status: "implemented-deviations"})
