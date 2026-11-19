@@ -265,19 +265,14 @@ func syncConfig(st Settings) (*store.SyncConfig, error) {
 	return &store.SyncConfig{URL: u, Token: tok, Interval: every}, nil
 }
 
-type multiFlag []string
-
-func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
-func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
-
 func syncSkill(args []string) error {
 	if len(args) == 0 || args[0] != "sync" {
 		return errors.New("usage: agent-kanban skill sync [--global] [--dir DIR]... [--url URL]")
 	}
 	fs := flag.NewFlagSet("skill sync", flag.ExitOnError)
-	var dirs multiFlag
+	var dirs []string
 	global := fs.Bool("global", false, "sync into your user skills (~/.claude/skills, ~/.codex/skills) instead of the current project")
-	fs.Var(&dirs, "dir", "skills root to write into (repeatable); overrides the default")
+	fs.Func("dir", "skills root to write into (repeatable); overrides the default", func(v string) error { dirs = append(dirs, v); return nil })
 	src := fs.String("url", skill.DefaultURL, "where to download SKILL.md from (https)")
 	fs.Parse(args[1:])
 	content, err := skill.Fetch(context.Background(), *src)

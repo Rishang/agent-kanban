@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -34,7 +35,7 @@ type CheckInput struct {
 	ID    string `json:"id" jsonschema:"task id"`
 	Item  string `json:"item,omitempty" jsonschema:"checklist item: 0-based index, or (part of) its text"`
 	Done  *bool  `json:"done,omitempty" jsonschema:"default true"`
-	Index *int   `json:"index,omitempty" jsonschema:"deprecated: use item"`
+	Index *int   `json:"index,omitempty" jsonschema:"deprecated: use item"` // older skills still send it
 }
 
 type StartInput struct {
@@ -59,6 +60,20 @@ type FinishInput struct {
 type CloseInput struct {
 	ID     string `json:"id" jsonschema:"task id"`
 	Reason string `json:"reason" jsonschema:"markdown: why this won't be done (duplicate of KB-3, obsolete, out of scope…)"`
+}
+
+var (
+	dropRe  = regexp.MustCompile(`(?is)<(script|style|head|nav)\b.*?</(script|style|head|nav)>`)
+	tagRe   = regexp.MustCompile(`(?s)<[^>]*>`)
+	blankRe = regexp.MustCompile(`\n\s*\n\s*`)
+)
+
+// planText is an HTML plan as plain text for agents: no head, styles, scripts or tags.
+// ponytail: regex strip, fine for the skill's own templates; use x/net/html if plans get exotic.
+func planText(page string) string {
+	t := tagRe.ReplaceAllString(dropRe.ReplaceAllString(page, ""), "")
+	t = strings.NewReplacer("&lt;", "<", "&gt;", ">", "&quot;", `"`, "&#39;", "'", "&nbsp;", " ", "&amp;", "&").Replace(t)
+	return strings.TrimSpace(blankRe.ReplaceAllString(t, "\n"))
 }
 
 type CreateMany struct {
@@ -100,8 +115,6 @@ func agentSchema[T any]() *jsonschema.Schema {
 	return sc
 }
 
-var agentRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
-
 // Handler serves MCP over streamable HTTP at /mcp?agent=<name>&project=<id>.
 // The agent name attributes every change; unknown agents are added as members.
 // project defaults to defProject (the project the server was started in).
@@ -111,7 +124,7 @@ func Handler(d *store.DB, defProject, version, baseURL string) http.Handler {
 	servers := map[string]*mcp.Server{}
 	return mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		agent := strings.ToLower(r.URL.Query().Get("agent"))
-		if !agentRe.MatchString(agent) {
+		if !store.NameRe.MatchString(agent) {
 			agent = "agent"
 		}
 		pid := r.URL.Query().Get("project")
@@ -224,6 +237,9 @@ func normID(prefix, id string) string {
 // findItem resolves a checklist item by index or unique (case-insensitive) text match.
 func findItem(cl []store.Check, item string) (int, error) {
 	item = strings.TrimSpace(item)
+	if item == "" {
+		return 0, errors.New("item is required: a 0-based index or (part of) the item's text")
+	}
 	if i, err := strconv.Atoi(item); err == nil {
 		if i < 0 || i >= len(cl) {
 			return 0, fmt.Errorf("item %d out of range; checklist has %d items", i, len(cl))
@@ -253,8 +269,6 @@ func findItem(cl []store.Check, item string) (int, error) {
 	return match, nil
 }
 
-var prioRank = map[string]int{"urgent": 0, "high": 1, "medium": 2, "low": 3}
-
 // pickNext chooses what an agent should work on: its own in-progress task first, else the
 // most urgent unassigned (or self-assigned) task in the todo column. Human-only, done and closed work is skipped.
 func pickNext(cols []store.Column, tasks []store.Task, agent string) (best *store.Task, reason string, alts []store.Task) {
@@ -283,26 +297,17 @@ func pickNext(cols []store.Column, tasks []store.Task, agent string) (best *stor
 	if len(cand) == 0 {
 		return nil, "nothing to pick up: no unassigned, non-human tasks in " + todo.Name, nil
 	}
+	prio := func(p string) int { // unknown priority (an imported board) ranks last
+		if i := slices.Index(store.Priorities, p); i >= 0 {
+			return i
+		}
+		return len(store.Priorities)
+	}
 	slices.SortStableFunc(cand, func(a, b store.Task) int {
-		if d := prioRank[a.Priority] - prioRank[b.Priority]; d != 0 {
-			return d
-		}
-		if (a.Due != "") != (b.Due != "") {
-			if a.Due != "" {
-				return -1
-			}
-			return 1
-		}
-		if a.Due != b.Due {
-			return strings.Compare(a.Due, b.Due)
-		}
-		switch {
-		case a.Pos < b.Pos:
-			return -1
-		case a.Pos > b.Pos:
-			return 1
-		}
-		return 0
+		return cmp.Or(
+			cmp.Compare(prio(a.Priority), prio(b.Priority)),
+			strings.Compare(cmp.Or(a.Due, "~"), cmp.Or(b.Due, "~")), // no due date sorts last
+			cmp.Compare(a.Pos, b.Pos))
 	})
 	reason = fmt.Sprintf("highest priority (%s) open task in %s", cand[0].Priority, todo.Name)
 	if cand[0].Due != "" {
@@ -379,6 +384,7 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			"4. finish_task when done: summary of what changed and how it was verified, plus the PR link; it goes to review.\n" +
 			"A task that should not be done at all (duplicate, obsolete, won't fix) is closed with close_task and a reason, not finished.\n" +
 			"Tasks can have sub-tasks one level deep (parent on create_task/update_task). Work on the sub-tasks; a parent can't be finished while any is open.\n" +
+			"For non-trivial work, attach an implementation plan with set_plan before coding; a human approves it on the board, so build only once get_plan says approved.\n" +
 			"Every result includes the task url; share it with the user. Columns and labels accept names in any case; ids accept 12 or KB-12. " +
 			"Tasks marked human-only are not yours: they are hidden from list_tasks and read-only. If a call returns permission denied, don't retry; tell the user.",
 	})
@@ -408,6 +414,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		if comments > 0 {
 			st += fmt.Sprintf(" (%d comments)", comments)
 		}
+		if t.PlanStatus != "" {
+			st += fmt.Sprintf(" {plan v%d %s}", t.PlanVersion, t.PlanStatus)
+		}
 		return st
 	}
 	urlNote := "task url = " + link + "<id>"
@@ -433,9 +442,8 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 
 	// guard checks every perm, rejects human-only tasks and makes sure the agent is a member.
 	guard := func(b store.Board, taskID string, perms ...string) error {
-		s.Touch(agent)
 		if !slices.ContainsFunc(b.Members, func(m store.Member) bool { return m.Name == agent }) {
-			if err := s.JoinAgent(agent); err != nil {
+			if err := s.JoinAgent(agent); err != nil { // Handler's join only logs a failure
 				return err
 			}
 		}
@@ -519,6 +527,11 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 					o.WriteString("(agent)")
 				}
 			}
+			if b.Settings.PlanStorage == store.PlanStorageFiles {
+				o.WriteString("\nplans: repo files in " + store.PlanDir + "/ (edit the .mdx with your own tools; set_plan path= once to link a new one; status only via set_plan)")
+			} else {
+				o.WriteString("\nplans: on the board (set_plan path= or body=)")
+			}
 			o.WriteString("\npriorities: " + strings.Join(b.Priorities, ">") + "\npermissions:")
 			for _, k := range slices.Sorted(maps.Keys(store.PermNames)) {
 				mark := "+"
@@ -532,7 +545,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_labels", Annotations: ro, Description: "All labels with task counts."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-			s.Touch(agent)
 			b, err := meta()
 			if err != nil {
 				return nil, nil, err
@@ -608,7 +620,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "list_tasks", Annotations: ro,
 		Description: "List tasks, one line each, in board order. Filters: column (id or name), assignee (me / none / name), label, q (text). Use get_task for the description and comments."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in ListInput) (*mcp.CallToolResult, any, error) {
-			s.Touch(agent)
 			out, err := listTasks(in, false)
 			if err != nil {
 				return nil, nil, err
@@ -619,7 +630,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 	mcp.AddTool(srv, &mcp.Tool{Name: "my_tasks", Annotations: ro,
 		Description: "Your open tasks (assigned to you, not done or closed). Check this when resuming work."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-			s.Touch(agent)
 			out, err := listTasks(ListInput{}, true)
 			if err != nil {
 				return nil, nil, err
@@ -631,7 +641,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		Description: "Suggest what to work on next: your own in-progress task if you have one, otherwise the most urgent unassigned task in the todo column " +
 			"(priority, then due date, then board order). Returns the reason and a few alternatives. Follow with start_task."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-			s.Touch(agent)
 			b, err := meta()
 			if err != nil {
 				return nil, nil, err
@@ -653,7 +662,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 
 	mcp.AddTool(srv, &mcp.Tool{Name: "get_task", Annotations: ro, Description: "Full task: description (markdown), checklist and comments. id accepts 12 or KB-12."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in IDInput) (*mcp.CallToolResult, any, error) {
-			s.Touch(agent)
 			b, err := meta()
 			if err != nil {
 				return nil, nil, err
@@ -666,6 +674,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			o.WriteString(line(t, 0) + "\n" + link + t.ID)
 			if t.Link != "" {
 				o.WriteString("\nlink: " + t.Link)
+			}
+			if t.Plan != "" {
+				fmt.Fprintf(&o, "\nplan: v%d %s (get_plan to read it)", t.PlanVersion, t.PlanStatus)
 			}
 			all, err := s.Tasks()
 			if err != nil {
@@ -737,7 +748,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if err != nil {
 				return nil, nil, err
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Created", t, b)), nil, nil
 		})
 
@@ -802,7 +812,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if err != nil {
 				return nil, nil, err
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Updated", t, b)), nil, nil
 		})
 
@@ -831,7 +840,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if t, err = s.UpdateTask(agent, "mcp", store.TaskPatch{ID: in.ID, Checklist: &t.Checklist}); err != nil {
 				return nil, nil, err
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Checked", t, b)), nil, nil
 		})
 
@@ -867,7 +875,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if err != nil {
 				return nil, nil, err
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Moved", t, b)), nil, nil
 		})
 
@@ -912,7 +919,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			if t, err = s.Task(t.ID); err != nil {
 				return nil, nil, err
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Started", t, b)), nil, nil
 		})
 
@@ -964,7 +970,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 					return nil, nil, err
 				}
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Progress on", t, b)), nil, nil
 		})
 
@@ -1015,7 +1020,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 					return nil, nil, err
 				}
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Finished", t, b)), nil, nil
 		})
 
@@ -1050,7 +1054,6 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 					return nil, nil, err
 				}
 			}
-			t.URL = link + t.ID
 			return text(taskStatus("Closed", t, b)), nil, nil
 		})
 
@@ -1071,7 +1074,81 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			return text("Commented on " + in.ID + " · " + link + in.ID), nil, nil
 		})
 
-	mcp.AddTool(srv, &mcp.Tool{Name: "delete_task", Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true)},
+	mcp.AddTool(srv, &mcp.Tool{Name: "list_plans", Annotations: ro,
+		Description: "Plans on this board, one per task: id, status, version, title and the plan's one-line description, newest first. " +
+			"q ranks by BM25 relevance over title, description and body; regex (RE2) filters and shows the matching line; status filters. Then get_plan id."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in PlansInput) (*mcp.CallToolResult, any, error) {
+			s.RefreshPlans()
+			tasks, err := s.Tasks()
+			if err != nil {
+				return nil, nil, err
+			}
+			out, err := listPlans(tasks, in, link)
+			if err != nil {
+				return nil, nil, err
+			}
+			return text(out), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "get_plan", Annotations: ro, Description: "A task's implementation plan (markdown) with its status and version. " +
+		"Build only when the status is approved: a human approves plans on the board."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in IDInput) (*mcp.CallToolResult, any, error) {
+			b, err := meta()
+			if err != nil {
+				return nil, nil, err
+			}
+			t, err := s.Task(id(b, in.ID))
+			if err != nil {
+				return nil, nil, err
+			}
+			if t.Plan == "" {
+				return text(t.ID + " has no plan · " + link + t.ID), nil, nil
+			}
+			if t.PlanPath != "" { // the repo file may have moved on
+				s.RefreshPlans()
+				if t, err = s.Task(t.ID); err != nil {
+					return nil, nil, err
+				}
+			}
+			body := t.Plan
+			if t.PlanFormat == "html" {
+				body = planText(body)
+			}
+			file := ""
+			if t.PlanPath != "" {
+				file = " · file " + t.PlanPath
+			}
+			return text(fmt.Sprintf("plan of %s %q: v%d %s%s · %s\n\n%s", t.ID, t.Title, t.PlanVersion, t.PlanStatus, file, link+t.ID, body)), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "set_plan",
+		Description: "Attach or revise a task's implementation plan, or change its status. A plan is markdown/MDX (mermaid and code blocks render on the board) " +
+			"or an html-plan-report page (.plan/<task>.plan.html; shown as a page). Pass path to the file in the project (preferred) or body. A new or changed plan becomes a new version with status awaiting: " +
+			"a human reviews and approves it on the board; check get_plan before building. Front matter status: is honoured. Needs the edit permission."},
+		func(ctx context.Context, _ *mcp.CallToolRequest, in store.PlanInput) (*mcp.CallToolResult, any, error) {
+			b, err := meta()
+			if err != nil {
+				return nil, nil, err
+			}
+			in.ID = id(b, in.ID)
+			if err := guard(b, in.ID, "edit"); err != nil {
+				return nil, nil, err
+			}
+			t, err := s.SetPlan(agent, "mcp", in)
+			if err != nil {
+				return nil, nil, err
+			}
+			if t.Plan == "" {
+				return text("Removed the plan of " + t.ID + " · " + link + t.ID), nil, nil
+			}
+			out := fmt.Sprintf("Plan of %s is v%d %s · %s", t.ID, t.PlanVersion, t.PlanStatus, link+t.ID)
+			if t.PlanPath != "" {
+				out += " · file " + t.PlanPath + " (kept in sync: edit it and the board gets a new version)"
+			}
+			return text(out), nil, nil
+		})
+
+	mcp.AddTool(srv, &mcp.Tool{Name: "delete_task", Annotations: &mcp.ToolAnnotations{DestructiveHint: new(true)},
 		Description: "Permanently delete a task and its comments. Only when the user explicitly asks."},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in IDInput) (*mcp.CallToolResult, any, error) {
 			b, err := meta()
@@ -1106,5 +1183,3 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 		})
 	return srv
 }
-
-func ptr[T any](v T) *T { return &v }

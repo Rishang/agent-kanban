@@ -45,6 +45,9 @@ func TestResolvers(t *testing.T) {
 	if _, err := findItem(cl, "9"); err == nil {
 		t.Error("out of range should fail")
 	}
+	if _, err := findItem(cl[:1], " "); err == nil {
+		t.Error("an empty item should fail, not match everything")
+	}
 }
 
 func TestPickNext(t *testing.T) {
@@ -62,6 +65,10 @@ func TestPickNext(t *testing.T) {
 	}
 	if !strings.Contains(reason, "WIP limit") {
 		t.Errorf("full in-progress column should be mentioned: %q", reason)
+	}
+	// an unknown priority (imported board) ranks last, not first
+	if best, _, _ := pickNext(cols, append(tasks, store.Task{ID: "KB-7", Column: "todo", Priority: "", Pos: -1}), "claude"); best == nil || best.ID != "KB-4" {
+		t.Fatalf("unknown priority picked first: %+v", best)
 	}
 	// a closed task assigned to you is not "in progress"
 	withClosed := append([]store.Column{{ID: "closed", Name: "Closed", Role: store.RoleClosed}}, cols...) // Closed first, as on new boards
@@ -114,5 +121,42 @@ func TestAgentSchema(t *testing.T) {
 		if !strings.Contains(string(b), `"enum":["","urgent","high","medium","low"`) {
 			t.Errorf("%s schema has no priority enum: %s", name, b)
 		}
+	}
+}
+
+func TestListPlans(t *testing.T) {
+	tasks := []store.Task{
+		{ID: "KB-1", Title: "Offline", Plan: "# Offline task list\n\nQueue edits in SQLite so they survive restarts.\n\n## Steps\nUse a sync worker.", PlanStatus: "awaiting", PlanVersion: 2, Updated: 2},
+		{ID: "KB-2", Title: "Push", Plan: "# Android 15 push\n\nCreate a notification channel.\n\n## Risks\nOEM battery savers.", PlanStatus: "approved", PlanVersion: 1, Updated: 3},
+		{ID: "KB-3", Title: "Page", PlanFormat: "html", PlanStatus: "draft", PlanVersion: 1, Updated: 1,
+			Plan: `<!DOCTYPE html><html><head><style>.x{}</style></head><body><h1>Cache &amp; prompts</h1><p class="lede">Reuse the prompt cache.</p><p>offline mention</p></body></html>`},
+		{ID: "KB-4", Title: "No plan"},
+	}
+	out, err := listPlans(tasks, PlansInput{}, "u/")
+	if err != nil || !strings.HasPrefix(out, "3 plan(s)") || !strings.Contains(out, `KB-3 {plan v1 draft} "Cache & prompts"`) ||
+		!strings.Contains(out, "Reuse the prompt cache.") || !strings.Contains(out, "Queue edits in SQLite so they survive restarts.") ||
+		strings.Index(out, "KB-2") > strings.Index(out, "KB-1") {
+		t.Fatalf("list = %s %v", out, err)
+	}
+	out, _ = listPlans(tasks, PlansInput{Query: "offline sqlite"}, "u/")
+	if !strings.HasPrefix(out, "2 plan(s)") || strings.Index(out, "KB-1") > strings.Index(out, "KB-3") || strings.Contains(out, "KB-2 ") {
+		t.Fatalf("bm25 = %s", out)
+	}
+	out, _ = listPlans(tasks, PlansInput{Regex: `(?i)oem|channel`}, "u/")
+	if !strings.HasPrefix(out, "1 plan(s)") || !strings.Contains(out, "match: Create a notification channel.") {
+		t.Fatalf("regex = %s", out)
+	}
+	if out, _ = listPlans(tasks, PlansInput{Status: "approved"}, "u/"); !strings.HasPrefix(out, "1 plan(s)") {
+		t.Fatalf("status = %s", out)
+	}
+	if _, err := listPlans(tasks, PlansInput{Regex: "("}, "u/"); err == nil {
+		t.Fatal("bad regex accepted")
+	}
+}
+
+func TestPlanText(t *testing.T) {
+	page := "<!DOCTYPE html><html><head><style>x{}</style></head><body><nav>On this page</nav><h1>Fix &amp; ship</h1><script>1</script></body></html>"
+	if got := planText(page); got != "Fix & ship" {
+		t.Errorf("planText = %q", got)
 	}
 }

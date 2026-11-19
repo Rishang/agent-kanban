@@ -7,7 +7,7 @@
 **Hand your agent a ticket. Watch it ship.**
 
 A local kanban board your coding agents work on alongside you: Claude Code, Codex, opencode, pi,
-anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one local or remote sqlite database.
+anything that speaks [MCP](https://modelcontextprotocol.io). One Go binary, one local or remote SQLite database.
 
 [Quick start](#quick-start) · [Demos](#see-it-work) · [Download](https://github.com/Rishang/agent-kanban/releases/latest)
 
@@ -35,15 +35,14 @@ curl -fsSL https://raw.githubusercontent.com/Rishang/agent-kanban/main/install.s
 irm https://raw.githubusercontent.com/Rishang/agent-kanban/main/install.ps1 | iex
 ```
 
-Both scripts download the release archive, verify its SHA-256 against `checksums.txt`, and install to a user-level directory (no admin or sudo needed when it is writable). Set `VERSION=v1.2.3` to pin a release and `INSTALL_DIR` to choose the folder. You can also grab an archive from [Releases](https://github.com/Rishang/agent-kanban/releases/latest), or build with `task build`.
+Both scripts download the release archive, verify its SHA-256 against `checksums.txt`, and install into a user-level directory (no admin rights or sudo needed as long as that directory is writable). Set `VERSION=v1.2.3` to pin a release and `INSTALL_DIR` to choose the folder. You can also grab an archive from [Releases](https://github.com/Rishang/agent-kanban/releases/latest), or build with `task build`.
 
 ```sh
-task build                       # → ./bin/agent-kanban
 cd ~/code/my-app && agent-kanban # board at http://127.0.0.1:7777/#my-app
 agent-kanban skill sync          # downloads the board-workflow skill for Claude Code / Codex into this project (--global: for all projects)
 ```
 
-The skill is not built into the binary. `skill sync` fetches [`skills/kanban/SKILL.md`](skills/kanban/SKILL.md) from the `main` branch, so it needs internet and picks up skill updates without a new release. Re-run it to update. Use `--url` to pin a tag or point at a mirror (https only).
+The skill is not built into the binary. `skill sync` fetches [`skills/kanban/SKILL.md`](skills/kanban/SKILL.md) from the `main` branch, so it needs an internet connection and picks up skill updates without a new release. Re-run it to update. Use `--url` to pin a tag or point at a mirror (HTTPS only).
 The skill on `main` stays compatible with released binaries: guidance for newer tools is conditional, so agents on an older release skip what their server doesn't have.
 
 Connect an agent (inside the repo):
@@ -76,12 +75,13 @@ Anything else: `http://127.0.0.1:7777/mcp?agent=<name>&project=<project>`.
 | 🛡️ | **Guardrails** | Per-project agent permissions; **human-only** tasks that agents skip |
 | ⚡ | **Live** | Every change streams to open browsers over SSE; Activity shows who did what, via UI or MCP |
 | 🗂️ | **Rich tasks** | Priorities, labels, assignees, due dates, checklists, comments, links, WIP limits |
+| 📋 | **Plans** | Agents attach an implementation plan (MDX or an html-plan-report page) to a task; you review, edit and **Approve** it on the board before any code is written. Kept in the database, or (Settings → Plan storage) as specs in `.agent-kanban/plans/` synced both ways |
 | 📝 | **Markdown** | Sanitized GitHub-flavoured markdown with highlighted code, mermaid diagrams and SVG |
 | 🔎 | **Search** | Every project at once, ranked, with filters like `is:open @claude #bug prio:high` (`is:done`, `is:closed`) |
 | 📁 | **Multi-project** | Each repo is a project in one shared database; task URLs like `/#my-app/KB-12` |
 | 🎨 | **Themes** | Warm light and dark themes, eleven accents |
 | ☁️ | **Optional sync** | Turso Cloud sync to share boards across machines; local-only by default |
-| 📦 | **One binary** | Server, UI and database engine embedded; the browser loads Vue, markdown and diagram libraries from jsDelivr (pinned, SRI-checked), so the UI needs internet |
+| 📦 | **One binary** | Server, UI and database engine embedded; the browser loads Vue, markdown and diagram libraries from jsDelivr (pinned, SRI-checked), so the UI needs an internet connection |
 
 ## See it work
 
@@ -118,8 +118,8 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | Tool | What it does |
 |---|---|
 | `get_board` | Columns (counts, WIP limits, roles), labels, members, priorities and your permissions. Call first. |
-| `next_task` | What to work on: your in-progress task, else the most urgent unassigned todo, with the reason |
-| `start_task` | Assign yourself, move to in progress and post your plan, in one call |
+| `next_task` | What to work on: your in-progress task, otherwise the most urgent unassigned todo, with the reason |
+| `start_task` | Assign yourself, move the task to in progress and post your plan, in one call |
 | `update_progress` | Tick checklist items (by index or text), add items, post a note |
 | `finish_task` | Summary + PR link, move to review (or Done with `done: true` and the *finish* permission) |
 | `close_task` | Won't do (duplicate, obsolete, out of scope): posts the reason and moves the task to **Not planned**. Needs the *close* permission, off by default |
@@ -127,12 +127,15 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `list_tasks` | Filter by column, assignee (`me`, `none`), label or text; hides human-only tasks |
 | `get_task` | Full description, checklist and comments |
 | `list_labels` | Labels with task counts |
+| `list_plans` | Every plan with its title and one-line description; search with `q` (BM25-ranked), `regex` or `status` |
+| `set_plan` / `get_plan` | Attach a markdown/MDX implementation plan to a task, from a file in the project or inline; versions are kept, and a human approves the plan on the board before the agent builds |
 | `create_task` / `create_tasks` | Create one task, or up to 50 with per-item errors; `parent` makes a sub-task |
 | `update_task` / `move_task` / `check_item` / `add_comment` | Lower-level edits |
 | `delete_task` | Off by default; enable in Settings → MCP & skill |
 
 Inputs are forgiving (`"In Progress"`, `"#Bug"`, `12` or `SHOP-12`, assignee `me`), and a wrong value comes back
 with the list of valid ones. Every change lands in **Activity** with who did it and how (UI or MCP).
+Plans: the separate [`kanban-plan`](skills/kanban-plan/SKILL.md) skill teaches agents to write a plan, attach it with `set_plan` and wait for your **Approve** on the board.
 Prompts: **`plan`** breaks a goal into tasks, **`standup`** summarizes the board.
 
 ## Configuration
@@ -150,7 +153,7 @@ Precedence: flags > environment > `.env` > `settings.json`.
 ### Sync across machines (optional)
 
 Local-only by default. Set a remote in `~/.config/kanban/.env` and every machine keeps its own `kanban.db`,
-pushes edits shortly after they happen and pulls others' every `syncInterval` (default `30s`). One remote
+pushes its edits shortly after they happen and pulls everyone else's every `syncInterval` (default `30s`). One remote
 holds all projects.
 
 **Option A: Turso Cloud** (managed)
