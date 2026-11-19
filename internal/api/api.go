@@ -28,14 +28,14 @@ func op[T any](fn func(s *store.Store, who string, in T) (any, error)) opFunc {
 	}
 }
 
-func ok(err error) (any, error) { return map[string]bool{"ok": err == nil}, err }
-
 var ops = map[string]opFunc{
 	"create_task": op(func(s *store.Store, who string, in store.TaskInput) (any, error) { return s.CreateTask(who, "ui", in) }),
 	"update_task": op(func(s *store.Store, who string, in store.TaskPatch) (any, error) { return s.UpdateTask(who, "ui", in) }),
 	"move_task":   op(func(s *store.Store, who string, in store.MoveInput) (any, error) { return s.MoveTask(who, "ui", in) }),
-	"delete_task": op(func(s *store.Store, who string, in store.IDInput) (any, error) {
-		return ok(s.DeleteTask(who, "ui", in.ID))
+	"delete_task": op(func(s *store.Store, who string, in struct {
+		ID string `json:"id"`
+	}) (any, error) {
+		return nil, s.DeleteTask(who, "ui", in.ID)
 	}),
 	"add_comment": op(func(s *store.Store, who string, in store.CommentInput) (any, error) {
 		return s.AddComment(who, "ui", in)
@@ -48,13 +48,15 @@ var ops = map[string]opFunc{
 		return s.UpdateTask(who, "ui", store.TaskPatch{ID: in.ID, Human: &in.Human})
 	}),
 
-	"save_settings":    op(func(s *store.Store, who string, in store.Settings) (any, error) { return ok(s.SaveSettings(who, in)) }),
-	"save_columns":     op(func(s *store.Store, who string, in []store.Column) (any, error) { return ok(s.SaveColumns(who, in)) }),
-	"save_members":     op(func(s *store.Store, who string, in []store.Member) (any, error) { return ok(s.SaveMembers(who, in)) }),
-	"save_labels":      op(func(s *store.Store, who string, in []store.Label) (any, error) { return ok(s.SaveLabels(who, in)) }),
-	"rename_label":     op(func(s *store.Store, who string, in store.RenameInput) (any, error) { return ok(s.RenameLabel(who, in)) }),
-	"delete_all_tasks": op(func(s *store.Store, who string, _ struct{}) (any, error) { return ok(s.DeleteAllTasks(who)) }),
-	"import":           op(func(s *store.Store, who string, in store.Board) (any, error) { return ok(s.Import(who, in)) }),
+	"save_settings": op(func(s *store.Store, who string, in store.Settings) (any, error) { return nil, s.SaveSettings(who, in) }),
+	"save_columns":  op(func(s *store.Store, who string, in []store.Column) (any, error) { return nil, s.SaveColumns(who, in) }),
+	"save_members":  op(func(s *store.Store, who string, in []store.Member) (any, error) { return nil, s.SaveMembers(who, in) }),
+	"save_labels":   op(func(s *store.Store, who string, in []store.Label) (any, error) { return nil, s.SaveLabels(who, in) }),
+	"rename_label": op(func(s *store.Store, who string, in store.RenameInput) (any, error) {
+		return nil, s.RenameLabel(who, in)
+	}),
+	"delete_all_tasks": op(func(s *store.Store, who string, _ struct{}) (any, error) { return nil, s.DeleteAllTasks(who) }),
+	"import":           op(func(s *store.Store, who string, in store.Board) (any, error) { return nil, s.Import(who, in) }),
 }
 
 // Msg is one SSE message: an event tagged with its project ("" = project list or whole-db change).
@@ -116,7 +118,7 @@ func Handler(d *store.DB, web fs.FS, mcp http.Handler) http.Handler {
 			}
 			out = append(out, sum)
 		}
-		reply(w, map[string]any{"projects": out, "me": d.Me(), "db": d.Path()}, nil)
+		reply(w, map[string]any{"projects": out}, nil)
 	})
 	mux.HandleFunc("POST /api/projects/add", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Name, Dir string }

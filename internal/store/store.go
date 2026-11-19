@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 )
@@ -139,7 +139,6 @@ type Task struct {
 	Labels       []string  `json:"labels"`
 	Checklist    []Check   `json:"checklist"`
 	Comments     []Comment `json:"comments"`
-	URL          string    `json:"url,omitempty"` // deep link, filled in for MCP responses
 	Pos          float64   `json:"pos"`
 	Created      int64     `json:"created"`
 	Updated      int64     `json:"updated"`
@@ -207,10 +206,6 @@ type MoveInput struct {
 type CommentInput struct {
 	ID   string `json:"id" jsonschema:"task id"`
 	Text string `json:"text" jsonschema:"markdown comment"`
-}
-
-type IDInput struct {
-	ID string `json:"id" jsonschema:"task id"`
 }
 
 type RenameInput struct {
@@ -612,12 +607,7 @@ func (d domain) isAgent(name string) bool {
 func (d domain) checkLabels(ls []string) error {
 	for _, l := range ls {
 		if !d.labels[l] {
-			var names []string
-			for n := range d.labels {
-				names = append(names, n)
-			}
-			sort.Strings(names)
-			return fmt.Errorf("unknown label %q; valid: %s (ask a human to add new labels in Settings)", l, strings.Join(names, ", "))
+			return fmt.Errorf("unknown label %q; valid: %s (ask a human to add new labels in Settings)", l, strings.Join(slices.Sorted(maps.Keys(d.labels)), ", "))
 		}
 	}
 	return nil
@@ -973,7 +963,8 @@ func (s *Store) SaveSettings(who string, st Settings) error {
 	})
 }
 
-var idRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
+// NameRe matches ids: columns, members (and MCP agent names), icons.
+var NameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,31}$`)
 
 // SaveColumns replaces the column list. Removed columns must be empty.
 func (s *Store) SaveColumns(who string, cols []Column) error {
@@ -983,7 +974,7 @@ func (s *Store) SaveColumns(who string, cols []Column) error {
 		}
 		keep := map[string]bool{}
 		for _, c := range cols {
-			if !idRe.MatchString(c.ID) || keep[c.ID] {
+			if !NameRe.MatchString(c.ID) || keep[c.ID] {
 				return Event{}, fmt.Errorf("bad or duplicate column id %q", c.ID)
 			}
 			if strings.TrimSpace(c.Name) == "" {
@@ -1071,10 +1062,10 @@ func (s *Store) SaveMembers(who string, ms []Member) error {
 	return s.write(who, "ui", func(tx *sql.Tx) (Event, error) {
 		keep := map[string]bool{}
 		for _, m := range ms {
-			if !idRe.MatchString(m.Name) || keep[m.Name] {
+			if !NameRe.MatchString(m.Name) || keep[m.Name] {
 				return Event{}, fmt.Errorf("bad or duplicate member name %q (lowercase letters, digits, - _)", m.Name)
 			}
-			if m.Icon != "" && !idRe.MatchString(m.Icon) {
+			if m.Icon != "" && !NameRe.MatchString(m.Icon) {
 				return Event{}, fmt.Errorf("bad icon %q", m.Icon)
 			}
 			keep[m.Name] = true

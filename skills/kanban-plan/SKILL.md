@@ -12,17 +12,15 @@ For a feature, refactor, migration or any change the user would want to see befo
 - `plans: repo files in .agent-kanban/plans/` → the `.mdx` in the repo is the spec, synced both ways. Edit it directly; the board picks up every change as a new version. Call `set_plan id path=…` once to link a new file to its task. Never send `body=`, and never edit the front matter `status:` line: the board writes it.
 - `plans: on the board` → write the file anywhere (`.agent-kanban/plans/` is a good home) and send it with `set_plan id path=…` after every revision; the board keeps its own copy.
 
-Read state with `get_plan` or `list_plans status=…`; read content from the file itself.
-
 1. **Investigate** the code and earlier plans: `list_plans q=<topic>` (BM25-ranked, with each plan's one-line description) or `list_plans regex=…` finds related or superseded plans. Note real paths, symbols and consumers of anything you change. Ask the user at most two questions, only ones that change the plan's shape; everything else becomes a stated assumption.
 2. **Write** `.agent-kanban/plans/<task-id>-<kebab-title>.mdx` using the outline below, then `set_plan id path=.agent-kanban/plans/…` (`body=` only if you can't write files). It becomes a version with status `awaiting`.
 3. **Ask for review:** give the user the task url and a three-line summary (goal, approach, biggest risk). Don't paste the plan. A human approves it on the board (Approve button) or edits it there; you can't set `approved`.
 4. **Wait.** Build nothing until `get_plan` says `approved`. If the user replies in chat, call `get_plan` again: they may have edited it, set it back to `draft`, or answered in a comment (`get_task`). If they approve in chat but the status isn't `approved`, ask them to click Approve.
 5. **Revise** by editing the file (and, on the board mode, `set_plan path=` again). Any content change is a new version and waits for approval again.
 6. **Build** from the approved plan; its steps can become checklist items or sub-tasks. When the code forces a departure, add a row to the plan's deviation log and right away call `set_plan id path=… status=implemented-deviations`: a build status sent with the change keeps the approval instead of asking for it again.
-7. **Finish:** `set_plan id status=implemented` (or `implemented-deviations`), then `finish_task`. A plan that was never approved can't be marked implemented. Mark a plan that was replaced `superseded`.
+7. **Finish:** `set_plan id status=implemented` (or `implemented-deviations`), then `finish_task`. A never-approved plan can't be marked implemented: ask for approval first. Mark a plan that was replaced `superseded`.
 
-If a call says the file changed in the repo, someone edited it meanwhile: re-read the file, then redo your edit.
+If `set_plan` says the file changed in the repo, re-read the file and redo your edit.
 
 Outline (drop sections that don't earn their place; keep the headings so reviewers can scan). The board's plan reader shows it like an html-plan-report page: plans rail, the plan, and an "On this page" rail built from the `##` headings.
 

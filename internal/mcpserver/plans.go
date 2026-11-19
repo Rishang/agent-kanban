@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"regexp"
@@ -157,9 +158,9 @@ func listPlans(tasks []store.Task, in PlansInput, link string) (string, error) {
 		hits = append(hits, h)
 	}
 	if scores != nil {
-		slices.SortStableFunc(hits, func(a, b hit) int { return cmpDesc(a.score, b.score) })
+		slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(b.score, a.score) })
 	} else {
-		slices.SortStableFunc(hits, func(a, b hit) int { return cmpDesc(float64(a.d.task.Updated), float64(b.d.task.Updated)) })
+		slices.SortStableFunc(hits, func(a, b hit) int { return cmp.Compare(b.d.task.Updated, a.d.task.Updated) })
 	}
 	limit := in.Limit
 	if limit <= 0 {
@@ -190,14 +191,4 @@ func listPlans(tasks []store.Task, in PlansInput, link string) (string, error) {
 		}
 	}
 	return o.String(), nil
-}
-
-func cmpDesc(a, b float64) int {
-	switch {
-	case a > b:
-		return -1
-	case a < b:
-		return 1
-	}
-	return 0
 }

@@ -1,15 +1,16 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,8 +33,9 @@ type DB struct {
 	// Notify receives every committed event; project "" means the project list changed.
 	Notify func(project string, e Event)
 
-	stMu sync.Mutex // guards seen and syncSt
-	seen map[string]int64
+	stMu    sync.Mutex // guards seen and syncSt
+	seen    map[string]int64
+	planMod map[string]string // linked plan file → mtime+size RefreshPlans last read (guarded by stMu)
 }
 
 type Project struct {
@@ -82,7 +84,7 @@ var schema = []string{
 
 // Open opens (or creates) the database. sc is nil for a purely local file.
 func Open(path, me string, sc *SyncConfig) (*DB, error) {
-	d := &DB{path: path, me: me, seen: map[string]int64{}}
+	d := &DB{path: path, me: me, seen: map[string]int64{}, planMod: map[string]string{}}
 	var err error
 	if sc == nil {
 		d.db, err = sql.Open("turso", path)
@@ -121,40 +123,32 @@ func Open(path, me string, sc *SyncConfig) (*DB, error) {
 
 // migrate upgrades databases created by older versions. Each step is idempotent.
 func (d *DB) migrate() error {
-	// columns.role: databases from before column roles have no such column.
-	if rows, err := d.db.Query(`SELECT role FROM columns LIMIT 0`); err == nil {
-		rows.Close()
-	} else if _, err := d.db.Exec(`ALTER TABLE columns ADD COLUMN role TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
+	add := func(col, ddl string) string { return `ALTER TABLE tasks ADD COLUMN ` + col + ` ` + ddl }
+	steps := []struct {
+		probe  string
+		alters []string
+	}{
+		{`SELECT role FROM columns LIMIT 0`, []string{`ALTER TABLE columns ADD COLUMN role TEXT NOT NULL DEFAULT ''`}},
+		// sub-tasks: the default keeps every existing task top-level; older binaries ignore the column.
+		{`SELECT parent FROM tasks LIMIT 0`, []string{add("parent", `TEXT NOT NULL DEFAULT ''`)}},
+		// implementation plans (markdown) reviewed on the board.
+		{`SELECT plan FROM tasks LIMIT 0`, []string{add("plan", `TEXT NOT NULL DEFAULT ''`),
+			add("plan_status", `TEXT NOT NULL DEFAULT ''`), add("plan_version", `INTEGER NOT NULL DEFAULT 0`)}},
+		// plans kept as files in the repo (planStorage = files).
+		{`SELECT plan_path FROM tasks LIMIT 0`, []string{add("plan_path", `TEXT NOT NULL DEFAULT ''`)}},
+		// the plan version a human last approved (0 = never).
+		{`SELECT plan_approved FROM tasks LIMIT 0`, []string{add("plan_approved", `INTEGER NOT NULL DEFAULT 0`)}},
 	}
-	// tasks.parent: sub-tasks. The default keeps every existing task top-level; older binaries ignore the column.
-	if rows, err := d.db.Query(`SELECT parent FROM tasks LIMIT 0`); err == nil {
-		rows.Close()
-	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN parent TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	// tasks.plan*: implementation plans (markdown) reviewed on the board.
-	if rows, err := d.db.Query(`SELECT plan FROM tasks LIMIT 0`); err == nil {
-		rows.Close()
-	} else {
-		for _, q := range []string{`ALTER TABLE tasks ADD COLUMN plan TEXT NOT NULL DEFAULT ''`,
-			`ALTER TABLE tasks ADD COLUMN plan_status TEXT NOT NULL DEFAULT ''`, `ALTER TABLE tasks ADD COLUMN plan_version INTEGER NOT NULL DEFAULT 0`} {
+	for _, st := range steps {
+		if rows, err := d.db.Query(st.probe); err == nil {
+			rows.Close()
+			continue
+		}
+		for _, q := range st.alters {
 			if _, err := d.db.Exec(q); err != nil {
 				return err
 			}
 		}
-	}
-	// tasks.plan_path: plans kept as files in the repo (planStorage = files).
-	if rows, err := d.db.Query(`SELECT plan_path FROM tasks LIMIT 0`); err == nil {
-		rows.Close()
-	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN plan_path TEXT NOT NULL DEFAULT ''`); err != nil {
-		return err
-	}
-	// tasks.plan_approved: the plan version a human last approved (0 = never).
-	if rows, err := d.db.Query(`SELECT plan_approved FROM tasks LIMIT 0`); err == nil {
-		rows.Close()
-	} else if _, err := d.db.Exec(`ALTER TABLE tasks ADD COLUMN plan_approved INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return err
 	}
 	return d.addColumnRoles()
 }
@@ -232,8 +226,6 @@ func (d *DB) Close() error {
 	}
 	return d.db.Close()
 }
-
-func (d *DB) Path() string { return d.path }
 
 // Me is the human the web UI acts as (the OS user who started the server).
 func (d *DB) Me() string { return d.me }
@@ -362,11 +354,7 @@ func (d *DB) Touch(agent string) {
 func (d *DB) seenCopy() map[string]int64 {
 	d.stMu.Lock()
 	defer d.stMu.Unlock()
-	out := make(map[string]int64, len(d.seen))
-	for k, v := range d.seen {
-		out[k] = v
-	}
-	return out
+	return maps.Clone(d.seen)
 }
 
 // ---------- projects ----------
@@ -739,11 +727,8 @@ func (d *DB) Search(raw string, limit int) ([]Hit, error) {
 			hits = append(hits, h)
 		}
 	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].score != hits[j].score {
-			return hits[i].score > hits[j].score
-		}
-		return hits[i].Updated > hits[j].Updated
+	slices.SortStableFunc(hits, func(a, b Hit) int {
+		return cmp.Or(cmp.Compare(b.score, a.score), cmp.Compare(b.Updated, a.Updated))
 	})
 	return hits[:min(len(hits), limit)], nil
 }
@@ -798,7 +783,6 @@ func searchTasks(q querier, pid string, text bool) ([]Task, error) {
 }
 
 func putMeta(q querier, key string, v any) error {
-	b, _ := json.Marshal(v)
-	_, err := q.Exec(`INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, string(b))
+	_, err := q.Exec(`INSERT INTO meta(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, key, jsonStr(v))
 	return err
 }

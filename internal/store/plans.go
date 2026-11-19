@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -146,7 +148,11 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 		if status == PlanApproved && via != "ui" && (changed || t.PlanStatus != PlanApproved) {
 			return Event{}, errors.New("only a human can approve a plan, on the board; set status awaiting and ask the user to review it")
 		}
-		if status == PlanApproved && via == "ui" && t.PlanStatus != PlanApproved && in.Version != t.PlanVersion-btoi(changed) {
+		seen := t.PlanVersion // the version the human saw: before this call's bump
+		if changed {
+			seen--
+		}
+		if status == PlanApproved && via == "ui" && t.PlanStatus != PlanApproved && in.Version != seen {
 			return Event{}, fmt.Errorf("the plan changed since you opened it (now v%d); review it again before approving", t.PlanVersion)
 		}
 		if via != "ui" {
@@ -175,7 +181,7 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 			return Event{}, err
 		}
 		if files && t.PlanPath != "" {
-			if err := writePlanFile(dir, t.PlanPath, t.Plan, t.PlanStatus, !changed); err != nil {
+			if err := writePlanFile(dir, t.PlanPath, t.Plan, t.PlanStatus, !changed || via == "file" || in.Path != ""); err != nil {
 				return Event{}, fmt.Errorf("write %s: %w", t.PlanPath, err)
 			}
 		}
@@ -216,19 +222,28 @@ func (s *Store) RefreshPlans() {
 	}
 	rows.Close()
 	for _, l := range ls {
+		// ponytail: mtime+size of the plan file only; an html plan's edited _assets show up on its next own edit
+		fi, err := os.Stat(filepath.Join(dir, l.path))
+		key := s.pid + "|" + l.path
+		s.stMu.Lock()
+		stamp := ""
+		if err == nil {
+			stamp = fmt.Sprint(fi.ModTime().UnixNano(), fi.Size())
+		}
+		same := err == nil && s.planMod[key] == stamp
+		s.stMu.Unlock()
+		if err != nil || same {
+			continue
+		}
 		content, _, err := ReadPlanFile(dir, l.path)
 		if err != nil {
 			continue
 		}
+		s.stMu.Lock()
+		s.planMod[key] = stamp
+		s.stMu.Unlock()
 		if body, _ := ParsePlan(content); body != l.plan && body != "" {
 			s.SetPlan(s.me, "file", PlanInput{ID: l.id, Body: &content})
 		}
 	}
-}
-
-func btoi(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }

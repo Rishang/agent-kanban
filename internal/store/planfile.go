@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -27,7 +28,6 @@ var (
 	backRe    = regexp.MustCompile(`\s*<a class="back" href="index\.html">[^<]*</a>`)
 	mdxHeadRe = regexp.MustCompile(`\A(?:[ \t]*(?:import|export)\s[^\n]*\n|[ \t]*\n)*`) // leading MDX import/export lines
 	fmStatus  = regexp.MustCompile(`(?m)^status:.*$`)
-	slugRe2   = regexp.MustCompile(`[^a-z0-9]+`)
 )
 
 // planFile resolves path (relative to dir, or absolute) to a file inside dir and returns it with its
@@ -206,25 +206,21 @@ func writePlanFile(dir, rel, body, status string, statusOnly bool) error {
 		return err
 	}
 	tmp := f.Name()
+	defer os.Remove(tmp) // a no-op once renamed
 	if _, err := f.WriteString(next); err != nil {
 		f.Close()
-		os.Remove(tmp)
 		return err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
 		return err
 	}
 	os.Chmod(tmp, 0o644)
-	if err := os.Rename(tmp, abs); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	return os.Rename(tmp, abs)
 }
 
 // newPlanPath is where a plan created on the board goes in files mode: PlanDir/<id>-<title>.mdx.
 func newPlanPath(t Task) string {
-	slug := strings.Trim(slugRe2.ReplaceAllString(strings.ToLower(t.Title), "-"), "-")
-	return PlanDir + "/" + strings.ToLower(t.ID) + "-" + slug[:min(len(slug), 48)] + ".mdx"
+	slug := slugRe.ReplaceAllString(strings.ToLower(t.Title), "-")
+	slug = cmp.Or(strings.Trim(slug[:min(len(slug), 48)], "-"), "plan")
+	return PlanDir + "/" + strings.ToLower(t.ID) + "-" + slug + ".mdx"
 }

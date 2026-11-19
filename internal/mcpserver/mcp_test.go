@@ -45,6 +45,9 @@ func TestResolvers(t *testing.T) {
 	if _, err := findItem(cl, "9"); err == nil {
 		t.Error("out of range should fail")
 	}
+	if _, err := findItem(cl[:1], " "); err == nil {
+		t.Error("an empty item should fail, not match everything")
+	}
 }
 
 func TestPickNext(t *testing.T) {
@@ -62,6 +65,10 @@ func TestPickNext(t *testing.T) {
 	}
 	if !strings.Contains(reason, "WIP limit") {
 		t.Errorf("full in-progress column should be mentioned: %q", reason)
+	}
+	// an unknown priority (imported board) ranks last, not first
+	if best, _, _ := pickNext(cols, append(tasks, store.Task{ID: "KB-7", Column: "todo", Priority: "", Pos: -1}), "claude"); best == nil || best.ID != "KB-4" {
+		t.Fatalf("unknown priority picked first: %+v", best)
 	}
 	// a closed task assigned to you is not "in progress"
 	withClosed := append([]store.Column{{ID: "closed", Name: "Closed", Role: store.RoleClosed}}, cols...) // Closed first, as on new boards

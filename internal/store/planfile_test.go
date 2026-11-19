@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func TestNewPlanPath(t *testing.T) {
+	for title, want := range map[string]string{"日本語": "kb-1-plan.mdx", "Dark mode!": "kb-1-dark-mode.mdx",
+		strings.Repeat("a", 47) + " b": "kb-1-" + strings.Repeat("a", 47) + ".mdx"} {
+		if got := newPlanPath(Task{ID: "KB-1", Title: title}); got != PlanDir+"/"+want {
+			t.Errorf("newPlanPath(%q) = %q", title, got)
+		}
+	}
+}
+
 func TestReadPlanFile(t *testing.T) {
 	dir, out := t.TempDir(), t.TempDir()
 	os.WriteFile(filepath.Join(dir, "p.mdx"), []byte("# plan"), 0o600)
