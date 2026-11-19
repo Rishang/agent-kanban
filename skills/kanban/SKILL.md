@@ -20,11 +20,11 @@ A task that should not be done at all (duplicate, obsolete, out of scope, won't 
 
 **Sub-tasks** (if `create_task` accepts `parent`): break a larger task into sub-tasks one level deep with `parent: KB-20`; a sub-task can't have its own. `list_tasks` marks sub-tasks `↳KB-20` and parents `{sub-tasks 1/4}`, and `get_task` lists them. Work on the sub-tasks, not the parent: `next_task` skips a parent while any sub-task is open, and you can't finish it until they are all done or closed.
 
+**Plans** (if your tools include `set_plan`): use the `kanban-plan` skill, if installed, for any planning; it has the full workflow and outline. For work the user wants to review before code is written, attach an implementation plan with `set_plan` (a `.md`/`.mdx` file in the project, or `body`). It waits as `awaiting` until a human approves it on the board; build only when `get_plan` says `approved`. You can't approve your own plan. `list_plans` lists and searches them (`q` ranked by BM25, `regex`, `status`). When `get_board` says plans are repo files, edit the `.mdx` directly and change status only with `set_plan`.
+
 `get_board` once per session tells you the columns (with roles and WIP limits), labels, members and your permissions. Inputs are forgiving: columns and labels by name in any case, ids as `12` or `KB-12`, assignee `me`. If a call fails, the error lists the valid values; fix and retry once.
 
-Write tools reply with a one-line status, not the whole task. Call `get_task` only when you need the description or comments; `list_tasks` is one line per task.
-
-The lower-level tools (`move_task`, `update_task`, `check_item`, `add_comment`, `list_tasks`, `get_task`) are there when the loop doesn't fit.
+Due dates are set by humans in the UI; the tools have no due field. `link` (set by `finish_task`, changed by `update_task`) is a related http(s) URL: PR, issue, doc. Write tools reply with a one-line status, not the whole task. Call `get_task` only when you need the description or comments; `list_tasks` is one line per task.
 
 ## Creating tasks
 
@@ -37,8 +37,6 @@ The lower-level tools (`move_task`, `update_task`, `check_item`, `add_comment`, 
 
 - Tasks a human marked **human-only** are not yours: `list_tasks` hides them (it reports how many) and every write to them fails. Don't work around it.
 - Tool results include the task url (e.g. `http://127.0.0.1:7777/#my-app/KB-12`); `list_tasks` gives the pattern once as `task url = …<id>`. Include it when you tell the user about a task.
-- Due dates are set by humans in the UI; there is no due field in the tools. `next_task` already weighs them.
-- `link` is a related http(s) URL (PR, issue, doc). `finish_task` sets it; `update_task` changes it.
 
 ## Etiquette
 
