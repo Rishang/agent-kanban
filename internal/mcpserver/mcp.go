@@ -529,6 +529,8 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 			if b.Settings.PlanStorage == store.PlanStorageFiles {
 				o.WriteString("\nplans: repo files in " + store.PlanDir + "/ (edit the .mdx with your own tools; set_plan path= once to link a new one; status only via set_plan)")
+			} else if b.Settings.PlanStorage == store.PlanStorageSupabase {
+				o.WriteString("\nplans: on the board, mirrored to Supabase (set_plan path= or body=)")
 			} else {
 				o.WriteString("\nplans: on the board (set_plan path= or body=)")
 			}

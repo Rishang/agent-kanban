@@ -42,7 +42,7 @@ Usage:
 Everything lives in the config folder ($AGENT_KANBAN_CONFIG_PATH, default ~/.config/kanban):
   kanban.db       every project's board
   settings.json   addr, user, syncInterval
-  .env            secrets: AGENT_KANBAN_TURSO_URL, AGENT_KANBAN_TURSO_TOKEN (optional sync: Turso Cloud or a self-hosted tursodb --sync-server)
+  .env            secrets: AGENT_KANBAN_TURSO_URL, AGENT_KANBAN_TURSO_TOKEN (optional sync: Turso Cloud or a self-hosted tursodb --sync-server), AGENT_KANBAN_SUPABASE_URL/_KEY (optional plan mirror)
 
 Precedence: flags > environment variables > .env > settings.json.
 `
@@ -123,6 +123,10 @@ const envTemplate = `# agent-kanban secrets. Real environment variables win over
 # or a self-hosted "tursodb --sync-server" (http://host:8080, token optional):
 # AGENT_KANBAN_TURSO_URL=libsql://my-kanban-myorg.turso.io
 # AGENT_KANBAN_TURSO_TOKEN=
+# Optional plan mirror (Settings -> Plan storage -> Supabase): the project URL and a service_role/secret key.
+# AGENT_KANBAN_SUPABASE_URL=https://<ref>.supabase.co
+# AGENT_KANBAN_SUPABASE_KEY=
+# AGENT_KANBAN_SUPABASE_TABLE=kanban_plans
 `
 
 func serve(args []string) error {

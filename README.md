@@ -146,7 +146,7 @@ Everything lives in `~/.config/kanban/` (override with `AGENT_KANBAN_CONFIG_PATH
 |---|---|
 | `kanban.db` | every project's board |
 | `settings.json` | `addr` (default `127.0.0.1:7777`), `user`, `syncInterval` |
-| `.env` | optional sync remote: `AGENT_KANBAN_TURSO_URL`, `AGENT_KANBAN_TURSO_TOKEN` |
+| `.env` | optional sync remote: `AGENT_KANBAN_TURSO_URL`, `AGENT_KANBAN_TURSO_TOKEN`; optional plan mirror: `AGENT_KANBAN_SUPABASE_URL`, `AGENT_KANBAN_SUPABASE_KEY` |
 
 Precedence: flags > environment > `.env` > `settings.json`.
 
@@ -187,6 +187,27 @@ Notes:
 - The first start with sync needs the remote, to set up the local copy. Start with a fresh `--db` when you
   turn sync on; an existing local database is not merged in.
 - Conflicts resolve as last push wins. Sync is new here; keep JSON exports (Settings → Data) as backups.
+
+### Mirror plans to Supabase
+
+Settings → **Plan storage → Board + Supabase mirror** pushes every plan (latest version, status, approval) to a
+Supabase table each time it changes, and all existing plans when you switch it on. The board stays the source of
+truth; the mirror is one-way, so edits in Supabase don't come back. It is per project, and credentials are per machine.
+
+1. Create the table in the Supabase SQL editor:
+   ```sql
+   create table kanban_plans (
+     project text not null, task_id text not null, project_name text, title text,
+     plan text, plan_format text, plan_status text,
+     plan_version int, plan_approved int, updated timestamptz,
+     primary key (project, task_id));
+   alter table kanban_plans enable row level security; -- no policies: only the service key can read or write
+   ```
+2. Add to `~/.config/kanban/.env`: `AGENT_KANBAN_SUPABASE_URL=https://<ref>.supabase.co` and
+   `AGENT_KANBAN_SUPABASE_KEY=<service_role or secret key>` (optionally `AGENT_KANBAN_SUPABASE_TABLE`, default `kanban_plans`).
+
+Failures (wrong key, missing table, offline) are logged by the server and retried on the next plan change.
+Plan storage is one choice per project, so it replaces the repo-files option while it is on.
 
 ## Keyboard
 

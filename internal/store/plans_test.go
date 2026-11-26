@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestPlans(t *testing.T) {
@@ -95,5 +96,33 @@ func TestPlanStaleEdit(t *testing.T) {
 	}
 	if got, err := s.SetPlan("me", "ui", PlanInput{ID: task.ID, Version: 2, Body: ptr("# v2 edited"), Status: "awaiting"}); err != nil || got.PlanVersion != 3 {
 		t.Fatalf("current edit: %+v %v", got, err)
+	}
+}
+
+func TestPlanUpdated(t *testing.T) {
+	db, err := Open(filepath.Join(t.TempDir(), "k.db"), "me", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	p, _ := db.AddProject("Dates", "")
+	s, _ := db.Project(p.ID)
+	task, _ := s.CreateTask("me", "ui", TaskInput{Title: "feature"})
+	if task.PlanUpdated != 0 {
+		t.Fatalf("a task without a plan has a plan date: %d", task.PlanUpdated)
+	}
+	got, _ := s.SetPlan("bot", "mcp", PlanInput{ID: task.ID, Body: ptr("# Plan")})
+	if got.PlanUpdated == 0 || got.PlanUpdated != got.Updated {
+		t.Fatalf("plan date not set: %+v", got)
+	}
+	time.Sleep(5 * time.Millisecond)
+	s.AddComment("me", "ui", CommentInput{ID: task.ID, Text: "hello"}) // moves the task's own date, not the plan's
+	stored, _ := s.Task(task.ID)
+	if stored.PlanUpdated != got.PlanUpdated || stored.Updated <= got.Updated {
+		t.Fatalf("a comment moved the plan date: plan %d, task %d (was %d)", stored.PlanUpdated, stored.Updated, got.Updated)
+	}
+	s.SetPlan("bot", "mcp", PlanInput{ID: task.ID, Body: ptr("")})
+	if stored, _ = s.Task(task.ID); stored.PlanUpdated != 0 {
+		t.Fatalf("removed plan keeps a date: %d", stored.PlanUpdated)
 	}
 }
