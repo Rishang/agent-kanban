@@ -299,12 +299,18 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
 .md .mermaid svg, .md .svgview img { cursor: zoom-in; }
 /* flatter, calmer diagrams: no drop shadows, rounded boxes, labels sit on the diagram background */
 .mermaid svg * { filter: none !important; }
+.dg-stage { --col: var(--bg); } /* edge labels sit on the viewer's background */
 .mermaid svg .node rect, .mermaid svg rect.actor, .mermaid svg .cluster rect { rx: 6px; ry: 6px; }
-.mermaid svg .node rect, .mermaid svg .node polygon, .mermaid svg .node circle { stroke-width: 1.2px; }
-.mermaid svg .edgeLabel, .mermaid svg .edgeLabel p, .mermaid svg .labelBkg { background-color: var(--col) !important; color: var(--muted); font-size: 13px; }
+.mermaid svg .edgeLabel, .mermaid svg .edgeLabel p, .mermaid svg .labelBkg { background-color: var(--col) !important; }
 .mermaid svg .edgeLabel rect { fill: var(--col) !important; opacity: 1; }
-.mermaid svg .flowchart-link, .mermaid svg .messageLine0, .mermaid svg .messageLine1, .mermaid svg .relationshipLine { stroke-width: 1.4px; }
 .mermaid svg foreignObject p { margin: 0; line-height: 1.4; }
+/* soft, thin outlines so the eye goes to the text: boxes, ER rows and lines at 1px, half strength */
+.mermaid svg rect, .mermaid svg polygon, .mermaid svg circle, .mermaid svg ellipse, .mermaid svg .node path, .mermaid svg .er path:not(.relationshipLine) { stroke-width: 1px !important; stroke-opacity: .5; }
+.mermaid svg .edgeLabel rect, .mermaid svg .labelBkg { stroke: none !important; }
+/* ER tables draw rows and dividers over the outline: fainter inside, so the table reads as one box */
+.mermaid svg g.divider > path, .mermaid svg g[class^="row-rect"] > path { stroke-opacity: .25; }
+.mermaid svg g.outer-path > path { stroke-opacity: .55; }
+.mermaid svg .flowchart-link, .mermaid svg .relationshipLine, .mermaid svg .messageLine0, .mermaid svg .messageLine1, .mermaid svg .transition, .mermaid svg line { stroke-width: 1px !important; stroke-opacity: .6; }
 /* if a label still measures wider than its box (unusual fonts), let it overflow instead of being cut off */
 .md .mermaid foreignObject, .dg-stage foreignObject { overflow: visible; }
 .dg-overlay { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; background: var(--bg); }
@@ -315,7 +321,7 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
 .dg-bar .pct { font: 12px var(--mono); min-width: 48px; text-align: center; }
 .dg-stage { flex: 1; overflow: auto; cursor: grab; display: grid; place-items: center; padding: 24px; }
 .dg-stage.drag { cursor: grabbing; user-select: none; }
-.dg-stage > * { flex: none; max-width: none !important; }
+.dg-stage > *, .dg-stage svg { flex: none; max-width: none !important; }
 
 .check { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 -8px; border-radius: 6px; font-size: 15px; }
 .check:hover { background: var(--hover); }
@@ -1344,35 +1350,34 @@ function mermaidify(root) {
   mermaidP.then(() => document.fonts.ready).then(() => {
     mermaid.initialize(mermaidConfig());
     return mermaid.run({ nodes });
-  }).then(() => refitLabels(nodes)).then(() => nodes.forEach(n => n.querySelector('svg') && addExpand(n)))
+  }).then(() => refitLabels(nodes)).then(() => nodes.forEach(n => { if (n.querySelector('svg')) { colorNodes(n); addExpand(n); } }))
     .catch(err => nodes.forEach(n => { if (!n.querySelector('svg')) { n.classList.add('mermaid-err'); n.title = String(err?.message || err); } }));
 }
 
-// The board's own colours, resolved to rgb() (mermaid can't read CSS variables or light-dark()).
-function cssColor(v) {
-  const el = document.createElement('span'); el.style.color = `var(${v})`; document.body.append(el);
-  const c = getComputedStyle(el).color; el.remove(); return c;
-}
 function mermaidConfig() {
-  const c = v => cssColor(v), font = getComputedStyle(document.body).fontFamily;
-  const card = c('--card'), col = c('--col'), text = c('--text'), muted = c('--muted'), border = c('--border'), accent = c('--accent');
+  const font = getComputedStyle(document.body).fontFamily;
   return {
-    startOnLoad: false, securityLevel: 'strict', theme: 'base', fontFamily: font,
-    themeVariables: {
-      darkMode: isDark(), fontFamily: font, fontSize: '15px', background: col,
-      primaryColor: card, mainBkg: card, primaryBorderColor: muted, nodeBorder: muted, primaryTextColor: text, textColor: text,
-      secondaryColor: c('--hover'), tertiaryColor: col, lineColor: muted, edgeLabelBackground: col,
-      clusterBkg: c('--panel'), clusterBorder: border, titleColor: text,
-      noteBkgColor: c('--accent-soft'), noteBorderColor: accent, noteTextColor: text,
-      actorBkg: card, actorBorder: muted, actorTextColor: text, signalColor: text, signalTextColor: text, labelBoxBkgColor: card, labelBoxBorderColor: muted,
-      attributeBackgroundColorOdd: card, attributeBackgroundColorEven: col, rowOdd: card, rowEven: col,
-    },
+    // Mermaid's own "redux" colour theme (as in the Mermaid Live Editor): dark or light fills, a distinct
+    // colour per node, bold headers.
+    startOnLoad: false, securityLevel: 'strict', look: 'classic', // classic: no neo drop shadows
+    theme: isDark() ? 'redux-dark-color' : 'redux-color',
+    fontFamily: font, themeVariables: { fontFamily: font, fontSize: '15px' },
     // roomier boxes: a label measured a little narrower than it renders still fits
     flowchart: { padding: 18, nodeSpacing: 44, rankSpacing: 56, diagramPadding: 12, curve: 'basis' },
     sequence: { actorMargin: 64, messageMargin: 40, boxMargin: 10, noteMargin: 12 },
     er: { diagramPadding: 16, entityPadding: 18, minEntityWidth: 110 },
     state: { padding: 12 },
   };
+}
+// The redux theme colours ER and class entities one by one; give flowchart and state nodes the same rotating
+// palette so every diagram reads the same way (decisions and steps stand apart at a glance).
+const NODE_COLORS = { dark: ['#d55fde', '#2fc9b4', '#f7923b', '#2dc7e8', '#3ad47a', '#e5c07b'], light: ['#a626a4', '#0e8a7d', '#c45f00', '#0277a8', '#1f8a4c', '#986801'] };
+function colorNodes(box) {
+  const pal = NODE_COLORS[isDark() ? 'dark' : 'light'];
+  box.querySelectorAll('svg g.node').forEach((g, i) => {
+    if (g.closest('.cluster') || g.getAttribute('style')?.includes('stroke')) return; // keep an author's own classDef/style
+    g.querySelectorAll(':scope > rect, :scope > polygon, :scope > circle, :scope > path, :scope > g > path').forEach(s => s.style.stroke = pal[i % pal.length]);
+  });
 }
 // If the browser still renders a label wider than mermaid measured it (fonts that finished loading late),
 // draw that diagram again once, now that every font is in.
@@ -1404,6 +1409,8 @@ function openDiagram(box) {
     h = vb?.height || src.naturalHeight || src.getBoundingClientRect().height;
   const el = src.cloneNode(true);
   el.removeAttribute('style'); el.removeAttribute('width'); el.removeAttribute('height');
+  // keep the diagram styles (.mermaid svg …) in the viewer: the copy sits in a .mermaid wrapper
+  const pic = document.createElement('div'); pic.className = box.classList.contains('mermaid') ? 'mermaid' : ''; pic.append(el);
   const ov = document.createElement('div');
   ov.className = 'dg-overlay'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Diagram');
   ov.innerHTML = '<div class="dg-bar"><span class="sp">Scroll or drag to pan · Ctrl + wheel to zoom · Esc to close</span>'
@@ -1411,7 +1418,7 @@ function openDiagram(box) {
     + '<button data-z="1" title="Zoom in" aria-label="Zoom in">+</button><button data-z="fit" title="Fit to screen">Fit</button>'
     + '<button data-z="1:1" title="Actual size">1:1</button><button data-z="x" title="Close (Esc)" aria-label="Close">✕</button></div><div class="dg-stage"></div>';
   const stage = ov.querySelector('.dg-stage'), pct = ov.querySelector('.pct');
-  stage.append(el);
+  stage.append(pic);
   let z = 1;
   const set = v => { z = Math.min(8, Math.max(0.1, v)); el.style.width = w * z + 'px'; el.style.height = h * z + 'px'; pct.textContent = Math.round(z * 100) + '%'; };
   const fit = () => set(Math.min((stage.clientWidth - 48) / w, (stage.clientHeight - 48) / h, 4));

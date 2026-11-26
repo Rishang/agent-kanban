@@ -62,10 +62,10 @@ Get … so that …
 <Callout kind="weak" title="Weakest part of this plan:">…</Callout>
 
 ## Flow
-<!-- Optional: a mermaid flowchart, sequenceDiagram or stateDiagram-v2 of the steps the change adds or reorders. -->
+<!-- Optional: flowchart, sequenceDiagram or stateDiagram-v2 of what the change adds or reorders (see diagrams.md). -->
 
 ## Data model
-<!-- Optional: a mermaid erDiagram of the tables or stored shapes the change touches, new fields marked. -->
+<!-- Optional: erDiagram or classDiagram of the tables, stored shapes or types it touches, new fields marked (see diagrams.md). -->
 
 ## Implementation steps
 <Steps>
@@ -112,23 +112,7 @@ Keep a blank line between a component's opening tag and any markdown block insid
 
 **Small fixes** (about three files, no real design choice): keep only the lede, current vs expected behaviour, the fix as a ```` ```diff ````, tests (including unchanged behaviour), risks and, once revised, the Changelog. **Optional sections** when they earn their place: Phases, Rollout and rollback (migrations, flags, anything a revert won't undo), Sources (anything outside the repo), and the two diagram sections below.
 
-**Diagrams (optional):** add them after Proposed approach when a picture says it faster than prose; the board renders mermaid and has an expand view for large ones. Draw only what the change touches, keep labels short (long labels wrap into tall boxes), and say in one line under each what to look at.
-- `## Flow` when the change adds or reorders steps across components, requests or states: a ```` ```mermaid ```` `flowchart LR` for logic and branches, `sequenceDiagram` for calls between services, agents and the board, `stateDiagram-v2` for status changes.
-- `## Data model` when the change adds or alters tables, columns, relations or stored shapes (including JSON and file formats): an `erDiagram` of the touched entities and their direct neighbours only, with new or changed fields marked in a comment.
-
-```mermaid
-erDiagram
-  TASKS ||--o{ COMMENTS : has
-  TASKS {
-    text id PK
-    int plan_updated "new"
-  }
-  COMMENTS {
-    int id PK
-    text task_id FK
-    text quote "new: passage anchor"
-  }
-```
+**Diagrams (optional):** before drawing one, read [diagrams.md](diagrams.md) in this skill's folder. It maps what you need to explain to the right mermaid type (flowchart, sequence, state, ER, class, architecture, gantt, quadrant and more), says which section each belongs in, and has a working example of each. In short: pick the type from what you explain, draw only what the change touches, mark what is new, keep labels short, and say in one line what to look at.
 
 **Changelog (required from version 2):** the board keeps only the latest plan text, so this section is the plan's only record of how it evolved.
 - A `## Changelog` section just before the Deviation log, one line per version, newest first, with the date: `- **v3** (YYYY-MM-DD): what changed and why.` Version 2 also adds the `- **v1**` line.
