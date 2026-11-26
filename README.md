@@ -128,7 +128,7 @@ Agents work in a four-call loop: **`next_task` → `start_task` → `update_prog
 | `get_task` | Full description, checklist and comments |
 | `list_labels` | Labels with task counts |
 | `list_plans` | Every plan with its title and one-line description; search with `q` (BM25-ranked), `regex` or `status` |
-| `set_plan` / `get_plan` | Attach a markdown/MDX implementation plan to a task, from a file in the project or inline; versions are kept, and a human approves the plan on the board before the agent builds |
+| `set_plan` / `get_plan` | Attach a markdown/MDX implementation plan to a task, from a file in the project or inline; each change is a new numbered version (the plan keeps its own changelog), and a human approves the plan on the board before the agent builds |
 | `create_task` / `create_tasks` | Create one task, or up to 50 with per-item errors; `parent` makes a sub-task |
 | `update_task` / `move_task` / `check_item` / `add_comment` | Lower-level edits |
 | `delete_task` | Off by default; enable in Settings → MCP & skill |

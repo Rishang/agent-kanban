@@ -5,7 +5,7 @@ description: Write the implementation plan for a coding task as markdown/MDX, at
 
 # Kanban plans: approve before building
 
-For a feature, refactor, migration or any change the user would want to see before code is written ("plan this", "spec first", or more than a few files), attach an implementation plan to the task and get it approved on the board. Plans are markdown or MDX; the board renders mermaid and code blocks, keeps versions and shows the status on the card. If your tools don't include `set_plan` (older server), post the plan as a `start_task` note and ask for approval in chat instead.
+For a feature, refactor, migration or any change the user would want to see before code is written ("plan this", "spec first", or more than a few files), attach an implementation plan to the task and get it approved on the board. Plans are markdown or MDX; the board renders mermaid and code blocks, numbers each version and shows the status on the card. It stores only the latest text, so the plan keeps its own history in a `## Changelog` section. If your tools don't include `set_plan` (older server), post the plan as a `start_task` note and ask for approval in chat instead.
 
 **Who writes what.** The plan's *content* is a file you write with your own tools; its *state* (status, approval, version) belongs to the board and changes only through MCP. `get_board` tells you where plans live:
 
@@ -16,7 +16,7 @@ For a feature, refactor, migration or any change the user would want to see befo
 2. **Write** `.agent-kanban/plans/<task-id>-<kebab-title>.mdx` using the outline below, then `set_plan id path=.agent-kanban/plans/…` (`body=` only if you can't write files). It becomes a version with status `awaiting`.
 3. **Ask for review:** give the user the task url and a three-line summary (goal, approach, biggest risk). Don't paste the plan. A human approves it on the board (Approve button) or edits it there; you can't set `approved`.
 4. **Wait.** Build nothing until `get_plan` says `approved`. If the user replies in chat, call `get_plan` again: they may have edited it, set it back to `draft`, or answered in a comment (`get_task`). If they approve in chat but the status isn't `approved`, ask them to click Approve.
-5. **Revise** by editing the file (and, on the board mode, `set_plan path=` again). Any content change is a new version and waits for approval again.
+5. **Revise** by editing the file (and, on the board mode, `set_plan path=` again). Any content change is a new version and waits for approval again. Each revision updates the `changed` callout and appends a `## Changelog` line for the new version (from version 2; see below).
 6. **Build** from the approved plan; its steps can become checklist items or sub-tasks. When the code forces a departure, add a row to the plan's deviation log and right away call `set_plan id path=… status=implemented-deviations`: a build status sent with the change keeps the approval instead of asking for it again.
 7. **Finish:** `set_plan id status=implemented` (or `implemented-deviations`), then `finish_task`. A never-approved plan can't be marked implemented: ask for approval first. Mark a plan that was replaced `superseded`.
 
@@ -83,6 +83,9 @@ Get … so that …
 
 ## Assumptions and open questions
 
+## Changelog
+<!-- From version 2: one line per version, newest first, append only. -->
+
 ## Deviation log
 <!-- Added once building starts: what changed, why, which step. -->
 ````
@@ -97,11 +100,13 @@ Get … so that …
 | `<Steps>` with `<Step id size title>` | Numbered implementation steps with S/M/L sizes |
 | `<Badge kind>` | Inline `ok`, `warn`, `risk` or `info` pill, e.g. likelihood and impact |
 
-Keep a blank line between a component's opening tag and any markdown block inside it. After a revision, add a `<Callout kind="changed" title="What changed since version N:">` under the stats.
+Keep a blank line between a component's opening tag and any markdown block inside it. After a revision, put a `<Callout kind="changed" title="What changed since version N:">` under the stats (replace the previous one: it covers only the latest revision) and add a line to the `## Changelog` section.
 
 **Decisions:** zero to four (more means split the task), each with 2–4 options, your pick first with `recommended`. Alternatives say "Pick this if: …". The user answers on the board (comment or edit), not in the terminal; record the answer with `decided=` as a new version.
 
-**Small fixes** (about three files, no real design choice): keep only the lede, current vs expected behaviour, the fix as a ```` ```diff ````, tests (including unchanged behaviour) and risks. **Optional sections** when they earn their place: Phases, Rollout and rollback (migrations, flags, anything a revert won't undo), Sources (anything outside the repo), and a Changelog from version 2.
+**Small fixes** (about three files, no real design choice): keep only the lede, current vs expected behaviour, the fix as a ```` ```diff ````, tests (including unchanged behaviour) and risks. **Optional sections** when they earn their place: Phases, Rollout and rollback (migrations, flags, anything a revert won't undo), and Sources (anything outside the repo).
+
+**Changelog (required from version 2):** a `## Changelog` section just before the Deviation log, one line per version, newest first, with the date: `- **v3** (YYYY-MM-DD): what changed and why.` Version 2 also adds the `- **v1**` line. Append only; never rewrite or drop earlier lines. The board keeps only the latest plan text, so this section is the plan's only record of how it evolved.
 
 **HTML instead of MDX:** if the html-plan-report skill is installed and the user wants HTML pages, write the plan with that skill into `.agent-kanban/plans/` (not its default `.plan/`; say so in its `overwrite.md`). Run its `validate_plan.py` on the page and `update_index.py .agent-kanban/plans` (that writes the `_assets/` the board inlines), then `set_plan id path=.agent-kanban/plans/<task-id>-<task>.plan.html`. Skip its plan-mode check, terminal questions and go-ahead: the board's Approve button replaces them. In the page keep `data-status` at `awaiting` (or `draft`); the board ignores any later status a page claims. The board never rewrites an HTML page, so after every revision or deviation row call `set_plan path=…` again (with `status=implemented-deviations` for a deviation row). Change status alone with `set_plan id status=…` and no path: re-sending an edited page is a new version, which `implemented` refuses.
 
