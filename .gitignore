@@ -6,3 +6,4 @@ kanban.db-*
 .serena/
 .github/videos/
 dist/
+.agent-kanban/
