@@ -22,6 +22,8 @@ A task that should not be done at all (duplicate, obsolete, out of scope, won't 
 
 **Plans** (if your tools include `set_plan`): use the `kanban-plan` skill, if installed, for any planning; it has the full workflow and outline. For work the user wants to review before code is written, attach an implementation plan with `set_plan` (a `.md`/`.mdx` file in the project, or `body`). It waits as `awaiting` until a human approves it on the board; build only when `get_plan` says `approved`. You can't approve your own plan. `list_plans` lists and searches them (`q` ranked by BM25, `regex`, `status`). When `get_board` says plans are repo files, edit the `.mdx` directly and change status only with `set_plan`.
 
+**Ticket files:** when `get_board` shows a `tickets:` line, every open ticket is also `.agent-kanban/tasks/<id>.yml`. Read or grep them for context; never edit them, since the board overwrites them on the ticket's next change. Change tickets only through these tools.
+
 `get_board` once per session tells you the columns (with roles and WIP limits), labels, members and your permissions. Inputs are forgiving: columns and labels by name in any case, ids as `12` or `KB-12`, assignee `me`. If a call fails, the error lists the valid values; fix and retry once.
 
 Due dates are set by humans in the UI; the tools have no due field. `link` (set by `finish_task`, changed by `update_task`) is a related http(s) URL: PR, issue, doc. Write tools reply with a one-line status, not the whole task. Call `get_task` only when you need the description or comments; `list_tasks` is one line per task.

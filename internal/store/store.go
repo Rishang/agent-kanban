@@ -28,6 +28,7 @@ type Settings struct {
 	DefaultAssignee string          `json:"defaultAssignee"`
 	ArchiveDays     int             `json:"archiveDays"`
 	PlanStorage     string          `json:"planStorage,omitempty"` // "" = in the board's database; PlanStorageFiles = also as files in the repo; PlanStorageSupabase = mirrored to Supabase
+	TicketStorage   string          `json:"ticketStorage,omitempty"` // "" = only in the board's database (default); TicketStorageFiles = also exported as YAML files (ticketexport.go)
 	Me              string          `json:"me"`                    // per process (OS user), never stored: synced machines differ
 	Perms           map[string]bool `json:"perms"`
 }
@@ -954,6 +955,9 @@ func (s *Store) SaveSettings(who string, st Settings) error {
 		}
 		if st.PlanStorage != PlanStorageFiles && st.PlanStorage != PlanStorageSupabase {
 			st.PlanStorage = ""
+		}
+		if st.TicketStorage != TicketStorageFiles {
+			st.TicketStorage = ""
 		}
 		if old, err := getSettings(tx, s.pid); err == nil {
 			if st.PlanStorage != old.PlanStorage {

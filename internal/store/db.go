@@ -314,6 +314,7 @@ func (d *DB) syncOnce(ctx context.Context) {
 	}
 	d.stMu.Unlock()
 	if pulled {
+		d.exportAllTickets() // pulled rows changed tickets without a local write
 		d.publish("", Event{T: now, Who: "sync", Via: "sync", Action: "pulled remote changes"})
 	}
 }
@@ -531,6 +532,9 @@ func (d *DB) write(fn func(tx *sql.Tx) (string, Event, error)) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if pid != "" {
+		d.exportTickets(pid) // still under d.mu, so files are written in commit order
 	}
 	if e.Action != "" {
 		d.publish(pid, e)

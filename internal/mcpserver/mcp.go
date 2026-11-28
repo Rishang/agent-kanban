@@ -534,6 +534,9 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			} else {
 				o.WriteString("\nplans: on the board (set_plan path= or body=)")
 			}
+			if b.Settings.TicketStorage == store.TicketStorageFiles {
+				o.WriteString("\ntickets: also exported to " + store.TicketDir + "/<id>.yml for open tickets (read them for context; read-only: change tickets through these tools, file edits are overwritten)")
+			}
 			o.WriteString("\npriorities: " + strings.Join(b.Priorities, ">") + "\npermissions:")
 			for _, k := range slices.Sorted(maps.Keys(store.PermNames)) {
 				mark := "+"

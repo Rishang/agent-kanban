@@ -927,6 +927,11 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
           <select class="inp" :value="f.settings.planStorage || ''" @change="setPlanStorage($event)">
             <option value="">Board (database)</option><option value="files">Repo files (.agent-kanban/plans)</option>
             <option value="supabase">Board + Supabase mirror</option></select></label>
+        <label class="field"><span>Ticket storage<small>Board only keeps tickets in the kanban database. Board + repo files also writes every open ticket as
+            <code>.agent-kanban/tasks/&lt;id&gt;.yml</code> in the project folder (fields, description, checklist, comments), so agents and git can read them.
+            One way: the board stays the source of truth and overwrites edits made in the files.</small></span>
+          <select class="inp" :value="f.settings.ticketStorage || ''" @change="setTicketStorage($event)">
+            <option value="">Board only</option><option value="files">Board + repo files (.agent-kanban/tasks)</option></select></label>
         <div class="field"><span>Backup</span><span style="display:flex;gap:8px;flex-wrap:wrap">
           <a class="btn ghost" :href="'api/p/' + encodeURIComponent(S.proj) + '/export'" download style="text-decoration:none">Export JSON</a>
           <label class="btn ghost">Import JSON<input type="file" accept="application/json" hidden @change="importFile"></label></span></div>
@@ -1714,6 +1719,15 @@ const Settings = {
       if (!confirm(msg)) { e.target.value = f.settings.planStorage || ''; return; }
       f.settings.planStorage = v; saveSettings();
     }
+    function setTicketStorage(e) {
+      const v = e.target.value, dir = S.B.project?.dir;
+      const msg = v === 'files'
+        ? `Also keep tickets as repo files?\n\nEvery open ticket is written to ${dir ? dir + '/' : ''}.agent-kanban/tasks/<id>.yml now and on every change; done and closed tickets lose their file. The board stays the source of truth: edits made in the files are overwritten.`
+          + (dir ? '' : '\n\nThis project has no folder on disk, so nothing is written until it has one.')
+        : 'Keep tickets on the board only?\n\nThe export stops. Files already in .agent-kanban/tasks/ stay where they are; delete them yourself if you no longer want them.';
+      if (!confirm(msg)) { e.target.value = f.settings.ticketStorage || ''; return; }
+      f.settings.ticketStorage = v; saveSettings();
+    }
     const saveCols = () => later('cols', () => save('save_columns', clone(f.columns)));
     const saveMembers = () => later('members', () => save('save_members', clone(f.members)));
     const saveLabels = () => later('labels', () => save('save_labels', clone(f.labels)));
@@ -1756,7 +1770,7 @@ const Settings = {
       } catch (err) { toast('Import failed: ' + err.message); }
     }
     function deleteAll() { if (confirm(`Delete all ${S.B.tasks.length} tasks? This cannot be undone.`)) act(() => api('delete_all_tasks')); }
-    return { f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets, setPlanStorage,
+    return { f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets, setPlanStorage, setTicketStorage,
       ARCHIVE: [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']],
       THEMES: [['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']], ACCENTS, PERMS, GLYPH,
       iconOf, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,
