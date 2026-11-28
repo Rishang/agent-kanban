@@ -72,7 +72,7 @@ var schema = []string{
 		col TEXT NOT NULL, priority TEXT NOT NULL, assignee TEXT NOT NULL DEFAULT '', due TEXT NOT NULL DEFAULT '',
 		labels TEXT NOT NULL DEFAULT '[]', checklist TEXT NOT NULL DEFAULT '[]', pos REAL NOT NULL, created INTEGER NOT NULL,
 		updated INTEGER NOT NULL, link TEXT NOT NULL DEFAULT '', human INTEGER NOT NULL DEFAULT 0, parent TEXT NOT NULL DEFAULT '',
-		plan TEXT NOT NULL DEFAULT '', plan_status TEXT NOT NULL DEFAULT '', plan_version INTEGER NOT NULL DEFAULT 0, plan_path TEXT NOT NULL DEFAULT '', plan_approved INTEGER NOT NULL DEFAULT 0,
+		plan TEXT NOT NULL DEFAULT '', plan_status TEXT NOT NULL DEFAULT '', plan_version INTEGER NOT NULL DEFAULT 0, plan_path TEXT NOT NULL DEFAULT '', plan_approved INTEGER NOT NULL DEFAULT 0, plan_updated INTEGER NOT NULL DEFAULT 0,
 		PRIMARY KEY (project, id))`,
 	`CREATE TABLE IF NOT EXISTS comments (id INTEGER PRIMARY KEY, project TEXT NOT NULL, task_id TEXT NOT NULL, who TEXT NOT NULL,
 		text TEXT NOT NULL, t INTEGER NOT NULL)`,
@@ -138,6 +138,8 @@ func (d *DB) migrate() error {
 		{`SELECT plan_path FROM tasks LIMIT 0`, []string{add("plan_path", `TEXT NOT NULL DEFAULT ''`)}},
 		// the plan version a human last approved (0 = never).
 		{`SELECT plan_approved FROM tasks LIMIT 0`, []string{add("plan_approved", `INTEGER NOT NULL DEFAULT 0`)}},
+		// when the plan last changed (the task's own `updated` also moves on comments and column moves); existing plans start from it.
+		{`SELECT plan_updated FROM tasks LIMIT 0`, []string{add("plan_updated", `INTEGER NOT NULL DEFAULT 0`), `UPDATE tasks SET plan_updated=updated WHERE plan<>''`}},
 	}
 	for _, st := range steps {
 		if rows, err := d.db.Query(st.probe); err == nil {
@@ -312,6 +314,7 @@ func (d *DB) syncOnce(ctx context.Context) {
 	}
 	d.stMu.Unlock()
 	if pulled {
+		d.exportAllTickets() // pulled rows changed tickets without a local write
 		d.publish("", Event{T: now, Who: "sync", Via: "sync", Action: "pulled remote changes"})
 	}
 }
@@ -529,6 +532,9 @@ func (d *DB) write(fn func(tx *sql.Tx) (string, Event, error)) error {
 	}
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if pid != "" {
+		d.exportTickets(pid) // still under d.mu, so files are written in commit order
 	}
 	if e.Action != "" {
 		d.publish(pid, e)

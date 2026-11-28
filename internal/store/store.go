@@ -27,7 +27,8 @@ type Settings struct {
 	DefaultCol      string          `json:"defaultCol"`
 	DefaultAssignee string          `json:"defaultAssignee"`
 	ArchiveDays     int             `json:"archiveDays"`
-	PlanStorage     string          `json:"planStorage,omitempty"` // "" = in the board's database; PlanStorageFiles = also as files in the repo
+	PlanStorage     string          `json:"planStorage,omitempty"` // "" = in the board's database; PlanStorageFiles = also as files in the repo; PlanStorageSupabase = mirrored to Supabase
+	TicketStorage   string          `json:"ticketStorage,omitempty"` // "" = only in the board's database (default); TicketStorageFiles = also exported as YAML files (ticketexport.go)
 	Me              string          `json:"me"`                    // per process (OS user), never stored: synced machines differ
 	Perms           map[string]bool `json:"perms"`
 }
@@ -136,6 +137,7 @@ type Task struct {
 	PlanFormat   string    `json:"planFormat,omitempty"`   // "html" for an html-plan-report page, "" for markdown
 	PlanPath     string    `json:"planPath,omitempty"`     // the linked file, relative to the project folder (planStorage = files)
 	PlanApproved int       `json:"planApproved,omitempty"` // the version a human last approved, 0 = never
+	PlanUpdated  int64     `json:"planUpdated,omitempty"`  // unix ms of the plan's last change (new version or status), 0 = no plan
 	Labels       []string  `json:"labels"`
 	Checklist    []Check   `json:"checklist"`
 	Comments     []Comment `json:"comments"`
@@ -301,12 +303,12 @@ func getLabels(q querier, pid string, tasks []Task) ([]Label, error) {
 	return out, rows.Err()
 }
 
-const taskCols = `id,title,descr,col,priority,assignee,due,labels,checklist,pos,created,updated,link,human,parent,plan,plan_status,plan_version,plan_path,plan_approved`
+const taskCols = `id,title,descr,col,priority,assignee,due,labels,checklist,pos,created,updated,link,human,parent,plan,plan_status,plan_version,plan_path,plan_approved,plan_updated`
 
 func scanTask(sc interface{ Scan(...any) error }) (Task, error) {
 	var t Task
 	var labels, checklist string
-	err := sc.Scan(&t.ID, &t.Title, &t.Description, &t.Column, &t.Priority, &t.Assignee, &t.Due, &labels, &checklist, &t.Pos, &t.Created, &t.Updated, &t.Link, &t.Human, &t.Parent, &t.Plan, &t.PlanStatus, &t.PlanVersion, &t.PlanPath, &t.PlanApproved)
+	err := sc.Scan(&t.ID, &t.Title, &t.Description, &t.Column, &t.Priority, &t.Assignee, &t.Due, &labels, &checklist, &t.Pos, &t.Created, &t.Updated, &t.Link, &t.Human, &t.Parent, &t.Plan, &t.PlanStatus, &t.PlanVersion, &t.PlanPath, &t.PlanApproved, &t.PlanUpdated)
 	if err != nil {
 		return t, err
 	}
@@ -677,8 +679,8 @@ func (s *Store) newPos(q querier, col, before, self string) (float64, error) {
 func jsonStr(v any) string { b, _ := json.Marshal(v); return string(b) }
 
 func (s *Store) insertTask(tx *sql.Tx, t Task) error {
-	_, err := tx.Exec(`INSERT INTO tasks(project,`+taskCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, s.pid, t.ID, t.Title, t.Description, t.Column,
-		t.Priority, t.Assignee, t.Due, jsonStr(t.Labels), jsonStr(t.Checklist), t.Pos, t.Created, t.Updated, t.Link, t.Human, t.Parent, t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved)
+	_, err := tx.Exec(`INSERT INTO tasks(project,`+taskCols+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, s.pid, t.ID, t.Title, t.Description, t.Column,
+		t.Priority, t.Assignee, t.Due, jsonStr(t.Labels), jsonStr(t.Checklist), t.Pos, t.Created, t.Updated, t.Link, t.Human, t.Parent, t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved, t.PlanUpdated)
 	return err
 }
 
@@ -942,7 +944,8 @@ func (s *Store) AddComment(who, via string, in CommentInput) (c Comment, err err
 // ---------- board configuration (UI only) ----------
 
 func (s *Store) SaveSettings(who string, st Settings) error {
-	return s.write(who, "ui", func(tx *sql.Tx) (Event, error) {
+	newMode := "" // set when plan storage changed to a mode that has a mirror
+	err := s.write(who, "ui", func(tx *sql.Tx) (Event, error) {
 		st.Prefix = strings.ToUpper(regexp.MustCompile(`[^A-Za-z0-9]`).ReplaceAllString(st.Prefix, ""))
 		if st.Prefix == "" {
 			st.Prefix = "KB"
@@ -950,8 +953,16 @@ func (s *Store) SaveSettings(who string, st Settings) error {
 		if st.Perms == nil {
 			st.Perms = map[string]bool{}
 		}
-		if st.PlanStorage != PlanStorageFiles {
+		if st.PlanStorage != PlanStorageFiles && st.PlanStorage != PlanStorageSupabase {
 			st.PlanStorage = ""
+		}
+		if st.TicketStorage != TicketStorageFiles {
+			st.TicketStorage = ""
+		}
+		if old, err := getSettings(tx, s.pid); err == nil {
+			if st.PlanStorage != old.PlanStorage {
+				newMode = st.PlanStorage
+			}
 		}
 		if name := strings.TrimSpace(st.Board); name != "" {
 			if _, err := tx.Exec(`UPDATE projects SET name=? WHERE id=?`, name, s.pid); err != nil {
@@ -961,6 +972,10 @@ func (s *Store) SaveSettings(who string, st Settings) error {
 		st.Me, st.Board = "", "" // per process / lives in projects
 		return Event{Action: "updated settings"}, putMeta(tx, "settings:"+s.pid, st)
 	})
+	if err == nil && newMode != "" {
+		s.MirrorAllPlans(newMode) // plans written before the mirror was switched on
+	}
+	return err
 }
 
 // NameRe matches ids: columns, members (and MCP agent names), icons.

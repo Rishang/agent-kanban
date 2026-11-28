@@ -529,8 +529,13 @@ func newServer(s *store.Store, agent, version, baseURL string) *mcp.Server {
 			}
 			if b.Settings.PlanStorage == store.PlanStorageFiles {
 				o.WriteString("\nplans: repo files in " + store.PlanDir + "/ (edit the .mdx with your own tools; set_plan path= once to link a new one; status only via set_plan)")
+			} else if b.Settings.PlanStorage == store.PlanStorageSupabase {
+				o.WriteString("\nplans: on the board, mirrored to Supabase (set_plan path= or body=)")
 			} else {
 				o.WriteString("\nplans: on the board (set_plan path= or body=)")
+			}
+			if b.Settings.TicketStorage == store.TicketStorageFiles {
+				o.WriteString("\ntickets: also exported to " + store.TicketDir + "/<id>.yml for open tickets (read them for context; read-only: change tickets through these tools, file edits are overwritten)")
 			}
 			o.WriteString("\npriorities: " + strings.Join(b.Priorities, ">") + "\npermissions:")
 			for _, k := range slices.Sorted(maps.Keys(store.PermNames)) {

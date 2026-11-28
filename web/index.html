@@ -285,11 +285,43 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
 .md a { color: var(--accent); }
 .md hr { border: 0; border-top: 1px solid var(--border); margin: 1.4em 0; }
 .md img { max-width: 100%; border-radius: 8px; }
-.md .svgview, .md .mermaid { background: var(--col); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 0 0 .9em; overflow-x: auto; text-align: center; }
+.md .svgview, .md .mermaid { background: var(--col); border: 1px solid var(--border); border-radius: 8px; padding: 14px 14px 40px; margin: 0 0 .9em; overflow-x: auto; text-align: center; }
 .md .svgview img { max-height: 480px; border-radius: 0; }
 .md > svg, .md p > svg { max-width: 100%; height: auto; }
 .md .mermaid svg { max-width: 100%; height: auto; }
 .md .mermaid.mermaid-err { text-align: left; white-space: pre-wrap; font: 13px/1.6 var(--mono); color: var(--muted); border-color: var(--p-urgent); }
+/* expand a diagram: a ⤢ button on each mermaid/svg block opens it full screen with zoom and pan */
+.md .mermaid, .md .svgview { position: relative; }
+.dg-expand { position: absolute; bottom: 8px; right: 8px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted); cursor: pointer; opacity: .75; transition: opacity .15s, color .15s; }
+.md .mermaid:hover .dg-expand, .md .svgview:hover .dg-expand, .dg-expand:focus-visible { opacity: 1; }
+.dg-expand:hover { color: var(--text); border-color: var(--accent); }
+.md .mermaid svg, .md .svgview img { cursor: zoom-in; }
+/* flatter, calmer diagrams: no drop shadows, rounded boxes, labels sit on the diagram background */
+.mermaid svg * { filter: none !important; }
+.dg-stage { --col: var(--bg); } /* edge labels sit on the viewer's background */
+.mermaid svg .node rect, .mermaid svg rect.actor, .mermaid svg .cluster rect { rx: 6px; ry: 6px; }
+.mermaid svg .edgeLabel, .mermaid svg .edgeLabel p, .mermaid svg .labelBkg { background-color: var(--col) !important; }
+.mermaid svg .edgeLabel rect { fill: var(--col) !important; opacity: 1; }
+.mermaid svg foreignObject p { margin: 0; line-height: 1.4; }
+/* soft, thin outlines so the eye goes to the text: boxes, ER rows and lines at 1px, half strength */
+.mermaid svg rect, .mermaid svg polygon, .mermaid svg circle, .mermaid svg ellipse, .mermaid svg .node path, .mermaid svg .er path:not(.relationshipLine) { stroke-width: 1px !important; stroke-opacity: .5; }
+.mermaid svg .edgeLabel rect, .mermaid svg .labelBkg { stroke: none !important; }
+/* ER tables draw rows and dividers over the outline: fainter inside, so the table reads as one box */
+.mermaid svg g.divider > path, .mermaid svg g[class^="row-rect"] > path { stroke-opacity: .25; }
+.mermaid svg g.outer-path > path { stroke-opacity: .55; }
+.mermaid svg .flowchart-link, .mermaid svg .relationshipLine, .mermaid svg .messageLine0, .mermaid svg .messageLine1, .mermaid svg .transition, .mermaid svg line { stroke-width: 1px !important; stroke-opacity: .6; }
+/* if a label still measures wider than its box (unusual fonts), let it overflow instead of being cut off */
+.md .mermaid foreignObject, .dg-stage foreignObject { overflow: visible; }
+.dg-overlay { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; background: var(--bg); }
+.dg-bar { display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+.dg-bar .sp { margin-right: auto; }
+.dg-bar button { min-width: 32px; height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--col); cursor: pointer; }
+.dg-bar button:hover { border-color: var(--accent); }
+.dg-bar .pct { font: 12px var(--mono); min-width: 48px; text-align: center; }
+.dg-stage { flex: 1; overflow: auto; cursor: grab; display: grid; place-items: center; padding: 24px; }
+.dg-stage.drag { cursor: grabbing; user-select: none; }
+.dg-stage > *, .dg-stage svg { flex: none; max-width: none !important; }
 
 .check { display: flex; align-items: center; gap: 10px; padding: 6px 8px; margin: 0 -8px; border-radius: 6px; font-size: 15px; }
 .check:hover { background: var(--hover); }
@@ -462,6 +494,7 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
 .plan-head { flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .plan-head .pid { font: 12px var(--mono); color: var(--muted); font-weight: 400; }
 .plan-head .pt { margin-right: auto; }
+.plan-toc .plan-date { display: block; margin: 0 0 14px; font-size: 12.5px; color: var(--muted); }
 .plan-head .btn { padding: 4px 10px; font-size: 12px; }
 .plan-body { flex: 1; overflow-y: auto; display: grid; grid-template-columns: minmax(0, 900px) 260px; justify-content: center; gap: 108px; padding: 28px 56px 60px; align-items: start; }
 .plan-toc { position: sticky; top: 0; font-size: 14.4px; line-height: 1.45; }
@@ -526,8 +559,8 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
   <button id="rPlans" :class="{ on: S.view === 'plans', dot: awaiting }" @click="openPlan()" title="Plans" aria-label="Plans"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></button>
   <button id="rBoard" :class="{ on: S.view !== 'plans' }" @click="showBoard()" title="Board" aria-label="Board" aria-current="page"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/></svg></button>
   <div class="fill"></div>
-  <button id="settingsBtn" @click="openSettings()" title="Settings (,)" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button id="rProjects" :class="{ on: S.projOpen }" @click="toggleProjects()" title="Projects (p)" aria-label="Projects"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/></svg></button>
+  <button id="settingsBtn" @click="openSettings()" title="Settings (,)" aria-label="Settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
 </nav>
 <aside class="projects" id="projects" :class="{ open: S.projOpen }" aria-label="Projects"><kb-projects></kb-projects></aside>
 <div class="palette" id="palette" v-show="S.palOpen" role="dialog" aria-label="Search every project" @click.self="closePalette"><kb-palette></kb-palette></div>
@@ -639,7 +672,9 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
       <a v-if="cur.planFormat === 'html'" class="icon-btn" :href="pageURL" target="_blank" rel="noopener" title="Open the original HTML page in a new tab">↗</a></div>
     <div class="plan-body" ref="bodyEl" @scroll.passive="spy">
       <article class="md pv" ref="artEl"></article>
-      <nav class="plan-toc" aria-label="On this page"><h5>On this page</h5>
+      <nav class="plan-toc" aria-label="On this page">
+        <span class="plan-date" :title="new Date(cur.planUpdated || cur.updated).toLocaleString()">Updated {{ new Date(cur.planUpdated || cur.updated).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) }} · {{ ago(cur.planUpdated || cur.updated) }}</span>
+        <h5>On this page</h5>
         <a v-for="(h, i) in toc" :key="i" :class="{ on: i === active }" @click="jump(i)">{{ h }}</a></nav></div>
   </div>
 </script>
@@ -887,9 +922,16 @@ option .avatar, selectedcontent .avatar { width: 18px; height: 18px; }
             <span v-if="S.B.sync.error" class="danger">failing: {{ S.B.sync.error }}</span><template v-else>{{ S.B.sync.lastPull ? 'synced ' + ago(S.B.sync.lastPull) : 'starting…' }}</template></span>
           <span v-else>Off (local only). Set <code>AGENT_KANBAN_TURSO_URL</code> (and a token for Turso Cloud) to enable.</span></div>
         <label class="field"><span>Plan storage<small>Board keeps plans in the kanban database. Repo files also keeps each plan as an .mdx in
-            <code>.agent-kanban/plans/</code> of the project folder, synced both ways: edit the spec in git, review and approve here (the status goes into its front matter).</small></span>
+            <code>.agent-kanban/plans/</code> of the project folder, synced both ways: edit the spec in git, review and approve here (the status goes into its front matter).
+            Supabase mirror also pushes every plan (latest version) to a Supabase table, one way; set <code>AGENT_KANBAN_SUPABASE_URL</code> and <code>AGENT_KANBAN_SUPABASE_KEY</code> in <code>~/.config/kanban/.env</code>.</small></span>
           <select class="inp" :value="f.settings.planStorage || ''" @change="setPlanStorage($event)">
-            <option value="">Board (database)</option><option value="files">Repo files (.agent-kanban/plans)</option></select></label>
+            <option value="">Board (database)</option><option value="files">Repo files (.agent-kanban/plans)</option>
+            <option value="supabase">Board + Supabase mirror</option></select></label>
+        <label class="field"><span>Ticket storage<small>Board only keeps tickets in the kanban database. Board + repo files also writes every open ticket as
+            <code>.agent-kanban/tasks/&lt;id&gt;.yml</code> in the project folder (fields, description, checklist, comments), so agents and git can read them.
+            One way: the board stays the source of truth and overwrites edits made in the files.</small></span>
+          <select class="inp" :value="f.settings.ticketStorage || ''" @change="setTicketStorage($event)">
+            <option value="">Board only</option><option value="files">Board + repo files (.agent-kanban/tasks)</option></select></label>
         <div class="field"><span>Backup</span><span style="display:flex;gap:8px;flex-wrap:wrap">
           <a class="btn ghost" :href="'api/p/' + encodeURIComponent(S.proj) + '/export'" download style="text-decoration:none">Export JSON</a>
           <label class="btn ghost">Import JSON<input type="file" accept="application/json" hidden @change="importFile"></label></span></div>
@@ -1302,16 +1344,116 @@ const isDark = () => document.documentElement.dataset.theme === 'dark' || (!docu
 let mermaidP = null;
 function mermaidify(root) {
   const nodes = [...root.querySelectorAll('pre > code.language-mermaid')].map(code => {
-    const d = document.createElement('div'); d.className = 'mermaid'; d.textContent = code.textContent;
+    const d = document.createElement('div'); d.className = 'mermaid'; d.textContent = d._src = code.textContent;
     code.parentElement.replaceWith(d); return d;
   });
   if (!nodes.length) return;
   // ponytail: 5 MB lib, loaded only when a diagram is on screen
   mermaidP ??= loadScript('https://cdn.jsdelivr.net/npm/mermaid@12.3.0/dist/mermaid.min.js', 'sha384-HHW54r639fK42Ip0coGF3mz8oSiGn0eEoWNTLs75X7H63pLSDBa0Tqs0RwGmLlXE');
-  mermaidP.then(() => {
-    mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: isDark() ? 'dark' : 'default' });
+  // Measure labels in the page's own font, after it has loaded: mermaid sizes each box from the text it measures,
+  // so a different or late font clips the labels.
+  mermaidP.then(() => document.fonts.ready).then(() => {
+    mermaid.initialize(mermaidConfig());
     return mermaid.run({ nodes });
-  }).catch(err => nodes.forEach(n => { if (!n.querySelector('svg')) { n.classList.add('mermaid-err'); n.title = String(err?.message || err); } }));
+  }).then(() => refitLabels(nodes)).then(() => nodes.forEach(n => { if (n.querySelector('svg')) { colorNodes(n); addExpand(n); } }))
+    .catch(err => nodes.forEach(n => { if (!n.querySelector('svg')) { n.classList.add('mermaid-err'); n.title = String(err?.message || err); } }));
+}
+
+function mermaidConfig() {
+  const font = getComputedStyle(document.body).fontFamily;
+  return {
+    // Mermaid's own "redux" colour theme (as in the Mermaid Live Editor): dark or light fills, a distinct
+    // colour per node, bold headers.
+    startOnLoad: false, securityLevel: 'strict', look: 'classic', // classic: no neo drop shadows
+    theme: isDark() ? 'redux-dark-color' : 'redux-color',
+    fontFamily: font, themeVariables: { fontFamily: font, fontSize: '15px' },
+    // roomier boxes: a label measured a little narrower than it renders still fits
+    flowchart: { padding: 18, nodeSpacing: 44, rankSpacing: 56, diagramPadding: 12, curve: 'basis' },
+    sequence: { actorMargin: 64, messageMargin: 40, boxMargin: 10, noteMargin: 12 },
+    er: { diagramPadding: 16, entityPadding: 18, minEntityWidth: 110 },
+    state: { padding: 12 },
+  };
+}
+// The redux theme colours ER and class entities one by one; give flowchart and state nodes the same rotating
+// palette so every diagram reads the same way (decisions and steps stand apart at a glance).
+const NODE_COLORS = { dark: ['#d55fde', '#2fc9b4', '#f7923b', '#2dc7e8', '#3ad47a', '#e5c07b'], light: ['#a626a4', '#0e8a7d', '#c45f00', '#0277a8', '#1f8a4c', '#986801'] };
+function colorNodes(box) {
+  const pal = NODE_COLORS[isDark() ? 'dark' : 'light'];
+  box.querySelectorAll('svg g.node').forEach((g, i) => {
+    if (g.closest('.cluster') || g.getAttribute('style')?.includes('stroke')) return; // keep an author's own classDef/style
+    g.querySelectorAll(':scope > rect, :scope > polygon, :scope > circle, :scope > path, :scope > g > path').forEach(s => s.style.stroke = pal[i % pal.length]);
+  });
+}
+// If the browser still renders a label wider than mermaid measured it (fonts that finished loading late),
+// draw that diagram again once, now that every font is in.
+async function refitLabels(nodes) {
+  const over = n => [...n.querySelectorAll('foreignObject')].some(f => (f.firstElementChild?.scrollWidth || 0) > f.width.baseVal.value + 1);
+  const redo = nodes.filter(n => n.querySelector('svg') && over(n) && !n._refit);
+  if (!redo.length) return;
+  await document.fonts.load(`15px ${getComputedStyle(document.body).fontFamily}`);
+  redo.forEach(n => { n._refit = true; n.removeAttribute('data-processed'); n.textContent = n._src; });
+  await mermaid.run({ nodes: redo });
+}
+
+// ---------- full-screen diagram viewer ----------
+function addExpand(box) {
+  if (box.querySelector(':scope > .dg-expand')) return;
+  const b = document.createElement('button');
+  b.className = 'dg-expand'; b.type = 'button'; b.title = 'Expand diagram'; b.setAttribute('aria-label', 'Expand diagram');
+  b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+  b.onclick = e => { e.stopPropagation(); openDiagram(box); };
+  // clicking the diagram itself opens it too, unless the click ends a text selection
+  box.addEventListener('click', e => { if (e.target !== b && !b.contains(e.target) && !String(getSelection())) { e.stopPropagation(); openDiagram(box); } });
+  box.append(b);
+}
+function openDiagram(box) {
+  const src = box.querySelector('svg, img');
+  if (!src) return;
+  // natural size: mermaid's viewBox, or the image's own pixels
+  const vb = src.viewBox?.baseVal, w = vb?.width || src.naturalWidth || src.getBoundingClientRect().width,
+    h = vb?.height || src.naturalHeight || src.getBoundingClientRect().height;
+  const el = src.cloneNode(true);
+  el.removeAttribute('style'); el.removeAttribute('width'); el.removeAttribute('height');
+  // keep the diagram styles (.mermaid svg …) in the viewer: the copy sits in a .mermaid wrapper
+  const pic = document.createElement('div'); pic.className = box.classList.contains('mermaid') ? 'mermaid' : ''; pic.append(el);
+  const ov = document.createElement('div');
+  ov.className = 'dg-overlay'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Diagram');
+  ov.innerHTML = '<div class="dg-bar"><span class="sp">Scroll or drag to pan · Ctrl + wheel to zoom · Esc to close</span>'
+    + '<button data-z="-1" title="Zoom out" aria-label="Zoom out">−</button><span class="pct"></span>'
+    + '<button data-z="1" title="Zoom in" aria-label="Zoom in">+</button><button data-z="fit" title="Fit to screen">Fit</button>'
+    + '<button data-z="1:1" title="Actual size">1:1</button><button data-z="x" title="Close (Esc)" aria-label="Close">✕</button></div><div class="dg-stage"></div>';
+  const stage = ov.querySelector('.dg-stage'), pct = ov.querySelector('.pct');
+  stage.append(pic);
+  let z = 1;
+  const set = v => { z = Math.min(8, Math.max(0.1, v)); el.style.width = w * z + 'px'; el.style.height = h * z + 'px'; pct.textContent = Math.round(z * 100) + '%'; };
+  const fit = () => set(Math.min((stage.clientWidth - 48) / w, (stage.clientHeight - 48) / h, 4));
+  const zoomAt = (v, cx, cy) => { // keep the point under the cursor in place
+    const r = stage.getBoundingClientRect(), x = (stage.scrollLeft + cx - r.left) / z, y = (stage.scrollTop + cy - r.top) / z;
+    set(v); stage.scrollLeft = x * z - (cx - r.left); stage.scrollTop = y * z - (cy - r.top);
+  };
+  const close = () => { ov.remove(); removeEventListener('keydown', onKey, true); last?.focus(); };
+  const onKey = e => {
+    if (e.key === 'Escape') close();
+    else if (e.key === '+' || e.key === '=') set(z * 1.25);
+    else if (e.key === '-') set(z / 1.25);
+    else if (e.key === '0') fit();
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  };
+  ov.querySelector('.dg-bar').onclick = e => {
+    const a = e.target.closest('button')?.dataset.z;
+    if (a === 'x') close(); else if (a === 'fit') fit(); else if (a === '1:1') set(1); else if (a) set(a === '1' ? z * 1.25 : z / 1.25);
+  };
+  stage.addEventListener('wheel', e => { if (!e.ctrlKey && !e.metaKey) return; e.preventDefault(); zoomAt(z * Math.exp(-e.deltaY / 300), e.clientX, e.clientY); }, { passive: false });
+  let drag = null;
+  stage.onpointerdown = e => { if (e.button) return; drag = { x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop }; stage.classList.add('drag'); stage.setPointerCapture(e.pointerId); };
+  stage.onpointermove = e => { if (drag) { stage.scrollLeft = drag.l - (e.clientX - drag.x); stage.scrollTop = drag.t - (e.clientY - drag.y); } };
+  stage.onpointerup = stage.onpointercancel = () => { drag = null; stage.classList.remove('drag'); };
+  const last = document.activeElement;
+  addEventListener('keydown', onKey, true);
+  document.body.append(ov);
+  fit();
+  ov.querySelector('[data-z="x"]').focus();
 }
 
 // ```svg blocks render as an <img>: an SVG loaded as an image can never run script.
@@ -1321,6 +1463,7 @@ function svgify(root) {
     box.className = 'svgview'; img.alt = 'SVG image';
     img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(code.textContent);
     img.onerror = () => { box.classList.add('mermaid-err'); box.textContent = 'Invalid SVG'; };
+    img.onload = () => addExpand(box);
     box.append(img); code.parentElement.replaceWith(box);
   });
 }
@@ -1570,9 +1713,20 @@ const Settings = {
       const msg = v === 'files'
         ? `Keep plans as repo files?\n\nEach plan becomes an .mdx in ${dir ? dir + '/' : ''}.agent-kanban/plans/, synced both ways: edits in the repo come back as new versions, and board edits and status changes (Approve, …) are written into the files.`
           + (dir ? '' : '\n\nThis project has no folder on disk, so plans will stay on the board until it has one.')
-        : 'Keep plans on the board only?\n\nPlans stop syncing with their repo files. The files stay where they are; the board keeps its own copies.';
+        : v === 'supabase'
+        ? 'Mirror plans to Supabase?\n\nThe board stays the source of truth. Every plan (latest version, status and approval) is pushed to your Supabase table on each change, starting with the existing plans now. Edits made in Supabase do not come back. Needs AGENT_KANBAN_SUPABASE_URL and AGENT_KANBAN_SUPABASE_KEY on this machine.'
+        : 'Keep plans on the board only?\n\nPlans stop syncing with their repo files or Supabase. Repo files stay where they are; the board keeps its own copies.';
       if (!confirm(msg)) { e.target.value = f.settings.planStorage || ''; return; }
       f.settings.planStorage = v; saveSettings();
+    }
+    function setTicketStorage(e) {
+      const v = e.target.value, dir = S.B.project?.dir;
+      const msg = v === 'files'
+        ? `Also keep tickets as repo files?\n\nEvery open ticket is written to ${dir ? dir + '/' : ''}.agent-kanban/tasks/<id>.yml now and on every change; done and closed tickets lose their file. The board stays the source of truth: edits made in the files are overwritten.`
+          + (dir ? '' : '\n\nThis project has no folder on disk, so nothing is written until it has one.')
+        : 'Keep tickets on the board only?\n\nThe export stops. Files already in .agent-kanban/tasks/ stay where they are; delete them yourself if you no longer want them.';
+      if (!confirm(msg)) { e.target.value = f.settings.ticketStorage || ''; return; }
+      f.settings.ticketStorage = v; saveSettings();
     }
     const saveCols = () => later('cols', () => save('save_columns', clone(f.columns)));
     const saveMembers = () => later('members', () => save('save_members', clone(f.members)));
@@ -1616,7 +1770,7 @@ const Settings = {
       } catch (err) { toast('Import failed: ' + err.message); }
     }
     function deleteAll() { if (confirm(`Delete all ${S.B.tasks.length} tasks? This cannot be undone.`)) act(() => api('delete_all_tasks')); }
-    return { f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets, setPlanStorage,
+    return { f, NAV, navOn, mainEl, copied, newLabel, newMember, theme, accent, nextId, snippets, setPlanStorage, setTicketStorage,
       ARCHIVE: [[0, 'Never'], [7, 'After 7 days'], [14, 'After 14 days'], [30, 'After 30 days']],
       THEMES: [['system', '◐ System'], ['light', '☀ Light'], ['dark', '☾ Dark']], ACCENTS, PERMS, GLYPH,
       iconOf, count, go, closeSettings, setTheme, setAccent, deleteProject, setHeader,

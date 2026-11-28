@@ -66,6 +66,7 @@ func ParsePlan(src string) (body, status string) {
 // asks for review again (awaiting). Only the UI may approve: an agent can't sign off its own plan.
 // With planStorage = files the plan is also a file in the repo (see planfile.go), written in the same transaction.
 func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
+	mirror := "" // the planStorage mode, once the stored plan changed (a PlanSink copies it)
 	err = s.write(who, via, func(tx *sql.Tx) (Event, error) {
 		if t, err = getTask(tx, s.pid, in.ID); err != nil {
 			return Event{}, err
@@ -110,8 +111,11 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 				fm = "" // a document can't move itself past review (approved, implemented); the board and set_plan status= decide
 			}
 			if body == "" { // remove; a linked file is left alone, only unlinked
-				_, err := tx.Exec(`UPDATE tasks SET plan='',plan_status='',plan_version=0,plan_path='',plan_approved=0,updated=? WHERE project=? AND id=?`, time.Now().UnixMilli(), s.pid, t.ID)
-				t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved = "", "", 0, "", 0
+				_, err := tx.Exec(`UPDATE tasks SET plan='',plan_status='',plan_version=0,plan_path='',plan_approved=0,plan_updated=0,updated=? WHERE project=? AND id=?`, time.Now().UnixMilli(), s.pid, t.ID)
+				t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved, t.PlanUpdated = "", "", 0, "", 0, 0
+				if err == nil {
+					mirror = st.PlanStorage
+				}
 				return Event{Action: "removed the plan of", TaskID: t.ID}, err
 			}
 			old := t.Plan
@@ -176,10 +180,12 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 			return Event{}, nil // nothing to do: no event
 		}
 		t.PlanStatus, t.Updated = status, time.Now().UnixMilli()
-		if _, err := tx.Exec(`UPDATE tasks SET plan=?,plan_status=?,plan_version=?,plan_path=?,plan_approved=?,updated=? WHERE project=? AND id=?`,
-			t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved, t.Updated, s.pid, t.ID); err != nil {
+		t.PlanUpdated = t.Updated
+		if _, err := tx.Exec(`UPDATE tasks SET plan=?,plan_status=?,plan_version=?,plan_path=?,plan_approved=?,plan_updated=?,updated=? WHERE project=? AND id=?`,
+			t.Plan, t.PlanStatus, t.PlanVersion, t.PlanPath, t.PlanApproved, t.PlanUpdated, t.Updated, s.pid, t.ID); err != nil {
 			return Event{}, err
 		}
+		mirror = st.PlanStorage
 		if files && t.PlanPath != "" {
 			if err := writePlanFile(dir, t.PlanPath, t.Plan, t.PlanStatus, !changed || via == "file" || in.Path != ""); err != nil {
 				return Event{}, fmt.Errorf("write %s: %w", t.PlanPath, err)
@@ -194,6 +200,9 @@ func (s *Store) SetPlan(who, via string, in PlanInput) (t Task, err error) {
 		}
 		return Event{Action: "marked the plan of", TaskID: t.ID, Detail: detail}, nil
 	})
+	if err == nil && mirror != "" {
+		s.mirrorPlan(mirror, t)
+	}
 	return
 }
 
